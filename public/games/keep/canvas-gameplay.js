@@ -40,14 +40,17 @@ export function canvasGameplay(store, transport, screens) {
       this.handPage = 0;
       this.trayPage = 0;
       this.logPage = 0;
+      this.actionPage = 0;
+      this.activePanel = undefined;
+      this.background = new Image();
+      this.background.src = new URL("./media/parchment-background.png", import.meta.url).href;
       this.focusId = null;
       this.hoverId = null;
       this.buttons = new Map();
       this.canvas = ig.system.canvas;
       this.controls = document.querySelector("#game-controls");
       this.wrap = document.querySelector(".canvas-wrap");
-      // Use release-based pointer input so swiping the tall phone canvas scrolls
-      // the page without selecting a card or sending a command on touchstart.
+      // Activate on release; a drag should never accidentally play a card.
       this.canvas.style.touchAction = "pan-y";
       this.canvas.addEventListener("pointerdown", (event) => {
         if (event.button === 0) this.pointerDown = { x: event.clientX, y: event.clientY };
@@ -84,6 +87,11 @@ export function canvasGameplay(store, transport, screens) {
           choices[(index + (event.shiftKey ? -1 : 1) + choices.length) % choices.length]?.focus({ preventScroll: true });
           return;
         }
+        if (event.key === "Escape" && this.layout?.activePanel) {
+          event.preventDefault();
+          this.activePanel = null;
+          return;
+        }
         const action = { d: "draw", p: "pass", r: "reveal", Escape: "clear-pile" }[event.key.length === 1 ? event.key.toLowerCase() : event.key];
         if (action && store.screen === "table") {
           event.preventDefault();
@@ -106,6 +114,10 @@ export function canvasGameplay(store, transport, screens) {
         if (this.controls.contains(document.activeElement)) this.pageFocus = target.pageKey;
         return;
       }
+      if (target.action === "panel") {
+        this.activePanel = target.toggle && this.layout.activePanel === target.panel ? null : target.panel;
+        return;
+      }
       const handle = target.dataset?.handle;
       if (target.action === "move-up" || target.action === "move-down") {
         const index = store.draft.indexOf(handle) + (target.action === "move-up" ? -1 : 1);
@@ -114,10 +126,16 @@ export function canvasGameplay(store, transport, screens) {
       screens.action(target.action, { dataset: target.dataset || {} });
     },
     update() {
-      const width = Math.max(280, Math.round(this.wrap.getBoundingClientRect().width));
+      const bounds = this.wrap.getBoundingClientRect();
+      const width = Math.max(280, Math.round(bounds.width));
       const table = store.screen === "table" && store.view;
+      if (store.view?.matchId !== this.matchId) this.activePanel = undefined;
+      if (this.activePanel === "tray" && !store.allowed("SEND_PACKET") && !store.draft.length) this.activePanel = "hand";
       this.model = table ? getTableState(store) : null;
-      this.layout = table ? getCanvasLayout(width, this.model.actions.length, store.allowed("SEND_PACKET") || store.draft.length > 0) : null;
+      if (table && store.allowed("SEND_PACKET")) this.model.actions.push({
+        id: "review-pile", action: "panel", panel: "tray", label: `${S.reviewPile}${store.draft.length ? ` · ${store.draft.length}` : ""}`, disabled: !store.draft.length,
+      });
+      this.layout = table ? getCanvasLayout(width, this.model.actions.length, store.allowed("SEND_PACKET") || store.draft.length > 0, Math.round(bounds.height), this.activePanel) : null;
       const height = this.layout?.height || Math.min(590, Math.max(280, width * 1.04));
       const scale = Math.min(2, window.devicePixelRatio || 1);
       if (width !== this.width || height !== this.height || scale !== this.scale) {
@@ -132,6 +150,7 @@ export function canvasGameplay(store, transport, screens) {
       if (decision !== this.decisionId || store.view?.matchId !== this.matchId) {
         this.handPage = 0;
         this.trayPage = 0;
+        this.actionPage = 0;
         this.decisionId = decision;
         this.matchId = store.view?.matchId;
       }
@@ -144,13 +163,20 @@ export function canvasGameplay(store, transport, screens) {
       this.targets = [];
       this.targetOffset = null;
       if (this.layout && store.screen === "table") {
-        rounded(ctx, 0, 0, this.width, this.height, 12, "#f4eedf");
+        ctx.fillStyle = "#cfb081";
+        ctx.fillRect(0, 0, this.width, this.height);
+        if (this.background.complete && this.background.naturalWidth) {
+          const zoom = Math.max(this.width / this.background.naturalWidth, this.height / this.background.naturalHeight);
+          const w = this.background.naturalWidth * zoom, h = this.background.naturalHeight * zoom;
+          ctx.drawImage(this.background, (this.width - w) / 2, (this.height - h) / 2, w, h);
+        }
         this.drawHeader(ctx);
-        this.drawBoard(ctx, this.layout.board);
+        if (this.layout.board) this.drawBoard(ctx, this.layout.board);
         this.drawDecision(ctx);
-        this.drawHand(ctx);
+        if (this.layout.hand) this.drawHand(ctx);
         if (this.layout.tray) this.drawTray(ctx);
-        this.drawLog(ctx);
+        if (this.layout.log) this.drawLog(ctx);
+        if (this.layout.menu) this.drawMenu(ctx);
         this.drawFooter(ctx);
         if (screens.leaving) this.drawLeaveDialog(ctx);
         const target = this.targets.find((t) => t.id === this.focusId);
@@ -174,8 +200,8 @@ export function canvasGameplay(store, transport, screens) {
       this.addTarget(target);
     },
     panel(ctx, r, title) {
-      rounded(ctx, r.x, r.y, r.w, r.h, 10, "#fffaf0", "#d6cebc");
-      text(ctx, title, r.x + 16, r.y + 24, 19, palette.ink, "left", "Georgia");
+      rounded(ctx, r.x, r.y, r.w, r.h, 10, "#fff8e7df", "#95724380");
+      text(ctx, title, r.x + 14, r.y + 21, 18, palette.ink, "left", "Georgia");
     },
     pager(ctx, rect, data, pageKey, noun) {
       if (data.pages <= 1) return;
@@ -186,34 +212,44 @@ export function canvasGameplay(store, transport, screens) {
     },
     drawHeader(ctx) {
       const r = this.layout.header;
-      text(ctx, fit(ctx, store.view.room.name, r.w - 92, this.layout.wide ? 30 : 23, "Georgia"), r.x, r.y + 18, this.layout.wide ? 30 : 23, palette.ink, "left", "Georgia");
-      text(ctx, `${S.turn} ${store.view.game?.turnNumber || 1}`, r.x + r.w, r.y + 18, 12, "#7e704f", "right");
-      if (store.error) text(ctx, fit(ctx, store.error, r.w, 12), r.x, r.y + 44, 12, palette.red);
+      rounded(ctx, r.x, r.y, r.w, r.h, 8, "#fff8e7d9");
+      text(ctx, fit(ctx, store.error || store.view.room.name, r.w - 92, this.layout.wide ? 24 : 19, "Georgia"), r.x + 12, r.y + 20, this.layout.wide ? 24 : 19, store.error ? palette.red : palette.ink, "left", "Georgia");
+      text(ctx, `${S.turn} ${store.view.game?.turnNumber || 1}`, r.x + r.w - 12, r.y + 20, 12, "#66502e", "right");
     },
     drawDecision(ctx) {
-      const r = this.layout.decision, m = this.model;
-      rounded(ctx, r.x, r.y, r.w, r.h, 10, palette.green);
-      text(ctx, fit(ctx, m.status, r.w - 112, 10), r.x + 18, r.y + 24, 10, "#e8c374");
-      if (!m.ended) {
-        const remaining = store.remaining();
-        text(ctx, remaining === 0 ? S.expired : `${remaining ?? "–"}s`, r.x + r.w - 18, r.y + 24, remaining === 0 ? 12 : 24, remaining !== null && remaining <= 10 ? "#f3b59b" : "#f7e7b6", "right", "Georgia");
+      const r = this.layout.decision, m = this.model, wide = this.layout.wide;
+      rounded(ctx, r.x, r.y, r.w, r.h, 10, "#173f34ee");
+      const infoWidth = wide ? r.w * 0.43 : r.w;
+      const remaining = store.remaining();
+      const timer = m.ended ? "" : remaining === 0 ? S.expired : `${remaining ?? "–"}s`;
+      text(ctx, fit(ctx, m.title, infoWidth - 110, wide ? 23 : 18, "Georgia"), r.x + 14, r.y + 22, wide ? 23 : 18, "#fff8e7", "left", "Georgia");
+      text(ctx, timer, r.x + infoWidth - 14, r.y + 22, 17, remaining !== null && remaining <= 10 ? "#f3b59b" : "#f7e7b6", "right", "Georgia");
+      text(ctx, fit(ctx, m.explanation, infoWidth - 28, 11), r.x + 14, r.y + (wide ? 51 : 41), 11, "#d7dfcb");
+      const data = pageItems(m.actions, this.actionPage, this.layout.actionSize);
+      this.actionPage = data.page;
+      const area = { x: wide ? r.x + infoWidth + 12 : r.x + 10, y: r.y + (wide ? 17 : 53), w: wide ? r.w - infoWidth - 24 : r.w - 20 };
+      const paged = data.pages > 1, inset = paged ? 48 : 0;
+      const buttonWidth = (area.w - inset * 2 - Math.max(0, data.items.length - 1) * 8) / Math.max(1, data.items.length);
+      data.items.forEach((action, i) => this.button(ctx, { ...action, group: "decision",
+        caption: action.action === "take" ? store.view.players.find((p) => p.playerId === action.dataset.playerId)?.displayName : action.caption,
+        x: area.x + inset + i * (buttonWidth + 8), y: area.y, w: buttonWidth, h: 40 }, "gold"));
+      if (paged) {
+        this.button(ctx, { id: "actionPage:previous", action: "page", pageKey: "actionPage", delta: -1, label: S.previous, caption: "←", disabled: data.page === 0, x: area.x, y: area.y, w: 40, h: 40 });
+        this.button(ctx, { id: "actionPage:next", action: "page", pageKey: "actionPage", delta: 1, label: S.next, caption: "→", disabled: data.page === data.pages - 1, x: area.x + area.w - 40, y: area.y, w: 40, h: 40 });
       }
-      paragraph(ctx, m.title, r.x + 18, r.y + 55, r.w - 36, 27, "#fff8e7", 2, "Georgia");
-      paragraph(ctx, m.explanation, r.x + 18, r.y + 124, r.w - 36, 13, "#c9d7c5", 3);
-      m.actions.forEach((action, i) => this.button(ctx, { ...action, x: r.x + 16, y: r.y + 174 + i * 50, w: r.w - 32, h: 42 }, "gold"));
-      if (m.ended && !m.actions.length) paragraph(ctx, S.waitRematch, r.x + 18, r.y + 190, r.w - 36, 13, "#c9d7c5");
+      if (!data.items.length) text(ctx, fit(ctx, m.status, area.w, 12), area.x + area.w / 2, area.y + 20, 12, "#e8c374", "center");
     },
     drawHand(ctx) {
       const r = this.layout.hand, hand = store.view.self.hand || [];
       this.panel(ctx, r, S.hand);
-      text(ctx, `${hand.length} ${S.handCount}`, r.x + r.w - 16, r.y + 24, 11, "#667268", "right");
-      text(ctx, fit(ctx, S.handHelp, r.w - 32, 11), r.x + 16, r.y + 48, 11, "#667268");
+      text(ctx, `${hand.length} ${S.handCount}`, r.x + r.w - 14, r.y + 21, 11, "#59604c", "right");
+      if (r.w > 700) text(ctx, S.handHelp, r.x + r.w / 2, r.y + 21, 11, "#59604c", "center");
       const data = pageItems(hand, this.handPage, this.layout.handSize);
       this.handPage = data.page;
-      const cw = 94, ch = 132, gap = 14, start = r.x + (r.w - data.items.length * (cw + gap) + gap) / 2;
+      const cw = this.layout.cardWidth, ch = this.layout.cardHeight, gap = 12, start = r.x + (r.w - data.items.length * (cw + gap) + gap) / 2;
       data.items.forEach((c, i) => {
         const selected = store.draft.includes(c.handle), index = store.draft.indexOf(c.handle);
-        const x = start + i * (cw + gap), y = r.y + (selected ? 64 : 70);
+        const x = start + i * (cw + gap), y = r.y + (selected ? 38 : 44);
         card(ctx, c.type, x, y, cw, ch, { selected, index: data.start + i });
         if (selected) {
           rounded(ctx, x + cw - 24, y - 5, 26, 25, 12, "#b88a36");
@@ -221,30 +257,36 @@ export function canvasGameplay(store, transport, screens) {
         }
         this.addTarget({ id: `hand:${c.handle}`, action: "select-card", label: `${data.start + i + 1}. ${cardLabel(c.type)}${selected ? ` · ${S.selected} ${index + 1}` : ""}`, dataset: { handle: c.handle }, selected, disabled: !store.allowed("SEND_PACKET"), x, y, w: cw, h: ch });
       });
-      if (!hand.length) text(ctx, S.noHand, r.x + 18, r.y + 125, 18, "#7b856c", "left", "Georgia");
-      this.pager(ctx, r, data, "handPage", S.hand);
+      if (!hand.length) text(ctx, S.noHand, r.x + r.w / 2, r.y + r.h / 2, 18, "#59604c", "center", "Georgia");
+      if (data.pages > 1) {
+        const y = r.y + 44 + (ch - 40) / 2;
+        this.button(ctx, { id: "handPage:previous", action: "page", pageKey: "handPage", delta: -1, label: `${S.previous}: ${S.hand}`, caption: "←", disabled: data.page === 0, x: r.x + 8, y, w: 40, h: 40 });
+        this.button(ctx, { id: "handPage:next", action: "page", pageKey: "handPage", delta: 1, label: `${S.next}: ${S.hand}`, caption: "→", disabled: data.page === data.pages - 1, x: r.x + r.w - 48, y, w: 40, h: 40 });
+      }
     },
     drawTray(ctx) {
       const r = this.layout.tray;
       this.panel(ctx, r, S.tray);
-      paragraph(ctx, `${S.sendTo} ${this.model.neighbor?.displayName || ""}`, r.x + 16, r.y + 50, r.w - 32, 12, "#667268", 1);
-      text(ctx, S.top, r.x + 16, r.y + 75, 10, "#996d24");
+      if (r.w > 600) text(ctx, `${S.sendTo} ${this.model.neighbor?.displayName || ""} · ${S.top}`, r.x + r.w / 2, r.y + 21, 11, "#667268", "center");
       const data = pageItems(store.draft, this.trayPage, this.layout.traySize);
       this.trayPage = data.page;
       data.items.forEach((handle, i) => {
-        const index = data.start + i, c = store.view.self.hand.find((c) => c.handle === handle), y = r.y + 94 + i * 48;
-        rounded(ctx, r.x + 12, y, r.w - 24, 44, 6, "#f1ead8");
+        const index = data.start + i, c = store.view.self.hand.find((c) => c.handle === handle), y = r.y + 38 + i * 44;
+        rounded(ctx, r.x + 12, y, r.w - 24, 40, 6, "#f1ead8");
         text(ctx, String(index + 1), r.x + 26, y + 22, 12, "#996d24", "center");
         text(ctx, fit(ctx, cardLabel(c?.type), r.w - 188, 12), r.x + 43, y + 22, 12);
         for (const [j, action, caption, disabled] of [[0, "move-up", "↑", index === 0], [1, "move-down", "↓", index === store.draft.length - 1], [2, "remove-card", "×", false]]) {
-          this.button(ctx, { id: `${action}:${handle}`, action, caption, label: `${action === "move-up" ? S.moveUp : action === "move-down" ? S.moveDown : S.remove}: ${cardLabel(c?.type)} ${index + 1}`, disabled: disabled || !store.allowed("SEND_PACKET"), dataset: { handle }, x: r.x + r.w - 148 + j * 44, y, w: 40, h: 44 });
+          this.button(ctx, { id: `${action}:${handle}`, action, caption, label: `${action === "move-up" ? S.moveUp : action === "move-down" ? S.moveDown : S.remove}: ${cardLabel(c?.type)} ${index + 1}`, disabled: disabled || !store.allowed("SEND_PACKET"), dataset: { handle }, x: r.x + r.w - 148 + j * 44, y, w: 40, h: 40 });
         }
       });
-      if (!store.draft.length) paragraph(ctx, S.trayEmpty, r.x + 18, r.y + 130, r.w - 36, 15, "#7b856c", 3, "Georgia");
-      // Pagination sits above the send/clear row, leaving the full draft reachable.
-      this.pager(ctx, { ...r, h: 340 }, data, "trayPage", S.tray);
-      this.button(ctx, { id: "clear-pile", action: "clear-pile", label: S.clearPile, x: r.x + 12, y: r.y + 340, w: 88, h: 36, disabled: !store.draft.length || !store.allowed("SEND_PACKET") });
-      this.button(ctx, { id: "send", action: "send", label: `${S.send}${store.draft.length ? ` · ${store.draft.length}` : ""}`, x: r.x + 110, y: r.y + 340, w: r.w - 122, h: 36, disabled: !store.draft.length || !store.allowed("SEND_PACKET") }, "green");
+      if (!store.draft.length) paragraph(ctx, S.trayEmpty, r.x + 18, r.y + 66, r.w - 36, 14, "#59604c", 3, "Georgia");
+      const y = r.y + r.h - 44;
+      this.button(ctx, { id: "clear-pile", action: "clear-pile", label: S.clearPile, caption: S.clear, x: r.x + 10, y, w: 56, h: 36, disabled: !store.draft.length || !store.allowed("SEND_PACKET") });
+      if (data.pages > 1) {
+        this.button(ctx, { id: "trayPage:previous", action: "page", pageKey: "trayPage", delta: -1, label: `${S.previous}: ${S.tray}`, caption: "←", disabled: data.page === 0, x: r.x + 72, y, w: 36, h: 36 });
+        this.button(ctx, { id: "trayPage:next", action: "page", pageKey: "trayPage", delta: 1, label: `${S.next}: ${S.tray}`, caption: "→", disabled: data.page === data.pages - 1, x: r.x + 114, y, w: 36, h: 36 });
+      }
+      this.button(ctx, { id: "send", action: "send", label: `${S.send}${store.draft.length ? ` · ${store.draft.length}` : ""}`, x: r.x + 158, y, w: r.w - 168, h: 36, disabled: !store.draft.length || !store.allowed("SEND_PACKET") }, "green");
     },
     drawLog(ctx) {
       const r = this.layout.log;
@@ -258,10 +300,21 @@ export function canvasGameplay(store, transport, screens) {
     },
     drawFooter(ctx) {
       const r = this.layout.footer;
-      const w = Math.min(108, (r.w - 16) / 3);
-      this.button(ctx, { id: "rules", action: "rules", label: S.how, x: r.x, y: r.y, w, h: 44 });
-      if (store.view.room.code) this.button(ctx, { id: "copy-code", action: "copy-code", label: S.copyCode, x: r.x + w + 8, y: r.y, w, h: 44 });
-      this.button(ctx, { id: "leave", action: "leave", label: S.leave, x: r.x + r.w - w, y: r.y, w, h: 44, disabled: !store.allowed("LEAVE_ROOM") });
+      const w = (r.w - 24) / 4;
+      for (const [i, panel, label] of [[0, "hand", S.handTab], [1, "tray", `${S.pileTab}${store.draft.length ? ` · ${store.draft.length}` : ""}`], [2, "log", S.historyTab], [3, "menu", S.menu]])
+        this.button(ctx, { id: `panel:${panel}`, action: "panel", panel, toggle: true, label, selected: this.layout.activePanel === panel,
+          disabled: panel === "tray" && !store.allowed("SEND_PACKET") && !store.draft.length,
+          x: r.x + i * (w + 8), y: r.y, w, h: 44 }, this.layout.activePanel === panel ? "green" : "plain");
+    },
+    drawMenu(ctx) {
+      const r = this.layout.menu;
+      this.panel(ctx, r, S.menu);
+      const actions = [{ id: "rules", action: "rules", label: S.how }];
+      if (store.view.room.code) actions.push({ id: "copy-code", action: "copy-code", label: S.copyCode });
+      actions.push({ id: "leave", action: "leave", label: S.leave, disabled: !store.allowed("LEAVE_ROOM") });
+      const w = (r.w - 28 - (actions.length - 1) * 8) / actions.length;
+      actions.forEach((action, i) => this.button(ctx, { ...action, x: r.x + 14 + i * (w + 8), y: r.y + 46, w, h: 44 }));
+      paragraph(ctx, S.canvasKeyboard, r.x + 14, r.y + 115, r.w - 28, 11, "#59604c", 3);
     },
     drawLeaveDialog(ctx) {
       rounded(ctx, 0, 0, this.width, this.height, 12, "#142f26cc");
@@ -323,7 +376,7 @@ export function canvasGameplay(store, transport, screens) {
       else if (!screens.leaving && this.wasLeaving) focus = this.buttons.get("leave");
       else if (this.pageFocus) {
         const target = this.targets.find((t) => this.enabled(t) &&
-          (this.pageFocus === "handPage" ? t.action === "select-card" : this.pageFocus === "trayPage" ? t.action === "remove-card" : t.pageKey === "logPage"));
+          (this.pageFocus === "handPage" ? t.action === "select-card" : this.pageFocus === "trayPage" ? t.action === "remove-card" : this.pageFocus === "actionPage" ? t.group === "decision" : t.pageKey === "logPage"));
         focus = this.buttons.get(target?.id) || [...this.buttons.values()].find((b) => !b.disabled && b.dataset.canvasTarget.startsWith(this.pageFocus));
       } else if (activeId) {
         focus = this.buttons.get(activeId);

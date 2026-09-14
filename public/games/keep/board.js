@@ -79,63 +79,54 @@ export function makeGame(store, transport, screens) {
       ctx.save();
       ctx.translate(rect.x, rect.y);
       this.targetOffset = rect;
-      rounded(ctx, 0, 0, w, h, 12, palette.green);
       ctx.save();
-      rounded(ctx, 11, 11, w - 22, h - 22, 9, null, "#56705a");
-      rounded(ctx, 16, 16, w - 32, h - 32, 6, null, "#294c3b");
-      for (const [x, y] of [
-        [29, 29],
-        [w - 29, 29],
-        [29, h - 29],
-        [w - 29, h - 29],
-      ])
-        star(ctx, x, y, 5, "#83906a");
-      const cx = w / 2,
-        cy = h * 0.50,
+      const players = [...v.players].sort((a, b) => a.seatIndex - b.seatIndex),
+        selfIndex = Math.max(0, players.findIndex((p) => p.playerId === v.self.playerId)),
+        ordered = players.slice(selfIndex).concat(players.slice(0, selfIndex)),
+        crowded = ordered.length >= 5,
+        pw = mobile ? Math.min(99, w * (crowded ? 0.24 : 0.26)) : Math.min(162, w * 0.22),
+        ph = Math.min(mobile ? 94 : 100, Math.max(40, h * 0.23)),
+        cx = w / 2,
+        cy = h / 2,
         rx = w * (mobile ? 0.35 : 0.33),
-        ry = h * 0.34;
-      ctx.strokeStyle = "#6e815845";
+        ry = Math.max(12, h / 2 - ph / 2 - 6),
+        sideY = Math.min(ry, Math.max(ph / 2 + 5, ry * 0.58));
+      ctx.strokeStyle = "#65533245";
       ctx.setLineDash([2, 8]);
       ctx.beginPath();
       ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
-      const players = [...v.players].sort((a, b) => a.seatIndex - b.seatIndex),
-        selfIndex = players.findIndex((p) => p.playerId === v.self.playerId),
-        ordered = players.slice(selfIndex).concat(players.slice(0, selfIndex));
-      const pw = mobile ? Math.min(99, w * 0.26) : Math.min(162, w * 0.22),
-        ph = mobile ? 94 : 100;
       const positions = ordered.map((p, i) => {
         const a = Math.PI / 2 + (i * Math.PI * 2) / ordered.length;
-        if (mobile && ordered.length === 6) {
-          const positions = [
-            [0.5, 0.845],
-            [0.18, 0.70],
-            [0.18, 0.29],
-            [0.5, 0.13],
-            [0.82, 0.29],
-            [0.82, 0.70],
+        if (crowded) {
+          const points = [
+            [cx, cy + ry],
+            [w * 0.18, cy + sideY],
+            [w * 0.18, cy - sideY],
+            ...(ordered.length === 6 ? [[cx, cy - ry]] : []),
+            [w * 0.82, cy - sideY],
+            [w * 0.82, cy + sideY],
           ];
-          return { p, x: w * positions[i][0], y: h * positions[i][1], a };
+          return { p, x: points[i][0], y: points[i][1], a };
         }
         return { p, x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry, a };
       });
       positions.forEach((pos, i) => {
         const next = positions[(i + 1) % positions.length],
           a = pos.a + Math.PI / ordered.length,
-          // Leave room for a pile in the passing lane, inside the seat panels.
-          lane = ordered.length === 6
-            ? 0.58
-            : ordered.length === 5 && Math.sin(a) > 0
-              ? mobile ? 0.62 : 0.57
-              : 0.7,
-          x = cx + Math.cos(a) * rx * lane,
-          y = cy + Math.sin(a) * ry * (mobile && ordered.length === 6 ? 0.61 : lane);
+          // Passing lanes stay between panels even when the table is short.
+          side = i < ordered.length / 2 ? -1 : 1,
+          topCrossing = ordered.length === 5 && i === 2,
+          x = crowded ? topCrossing ? cx : cx + side * w * 0.16
+            : ordered.length === 2 ? cx + Math.cos(a) * rx * 0.7 : (pos.x + next.x) / 2,
+          y = crowded ? topCrossing ? cy - ry : (pos.y + next.y) / 2
+            : ordered.length === 2 ? cy : ordered.length === 3 && i === 1 ? cy - ry : (pos.y + next.y) / 2;
         ctx.save();
         ctx.translate(x, y);
         // The origin stays fixed; the recipient identifies the latest pass.
         if (g.packet && next.p.playerId === g.packet.recipientPlayerId) {
-          const packetW = mobile ? Math.min(ordered.length === 6 ? 28 : 30, w * 0.085) : ordered.length === 6 ? 28 : 38,
+          const packetW = Math.min(mobile ? 30 : 38, Math.max(16, h * 0.1), crowded ? w * 0.32 - pw - 6 : Infinity),
             packetH = packetW * 1.42;
           ctx.save();
           ctx.scale(packetW / 58, packetW / 58);
@@ -145,8 +136,8 @@ export function makeGame(store, transport, screens) {
           rounded(ctx, -9, packetH / 2 - 14, 18, 14, 4, "#f7edcf", "#bd8e36");
           text(ctx, String(g.packet.count), 0, packetH / 2 - 7, 11, palette.ink, "center", "Georgia");
         } else {
-          ctx.rotate(a + Math.PI / 2);
-          ctx.strokeStyle = "#aab58a";
+          ctx.rotate(Math.atan2(next.y - pos.y, next.x - pos.x));
+          ctx.strokeStyle = "#66502e";
           ctx.lineWidth = 1.3;
           ctx.beginPath();
           ctx.moveTo(-6, -4);
@@ -168,32 +159,38 @@ export function makeGame(store, transport, screens) {
         );
       });
       // Only counts and the same generic card back are used for either hidden zone.
-      const bw = mobile ? Math.min(43, w * 0.12) : 58,
+      const compactPile = h < 260,
+        bw = Math.min(mobile ? Math.min(43, w * 0.12) : 58, Math.max(24, h - ph * 2 - 36) / 1.42),
         bh = bw * 1.42,
         centerY = cy - bh / 2,
         deckX = cx - bw / 2;
+      ctx.save();
+      ctx.translate(deckX, centerY);
+      ctx.scale(bw / 58, bw / 58);
       for (let i = Math.min(3, g.drawPileCount || 0) - 1; i >= 0; i--)
-        card(ctx, null, deckX - i * 2, centerY - i * 2, bw, bh, { back: true });
+        card(ctx, null, -i * 2, -i * 2, 58, 58 * 1.42, { back: true });
+      ctx.restore();
       if (!g.drawPileCount) {
-        rounded(ctx, deckX, centerY, bw, bh, 5, null, "#61735a");
+        rounded(ctx, deckX, centerY, bw, bh, 5, null, "#766342");
         text(
           ctx,
           "0",
           deckX + bw / 2,
           centerY + bh / 2,
-          24,
-          "#819076",
+          Math.min(24, bw * 0.65),
+          "#665333",
           "center",
           "Georgia",
         );
       }
-      text(
+      if (compactPile && g.drawPileCount) rounded(ctx, cx - 10, centerY + bh - 13, 20, 14, 4, "#fff7dd", "#977039");
+      if (g.drawPileCount) text(
         ctx,
         String(g.drawPileCount ?? 0),
         deckX + bw / 2,
-        centerY + bh + 15,
-        16,
-        "#e9d6a6",
+        centerY + bh + (compactPile ? -6 : 15),
+        compactPile ? 10 : 16,
+        "#403822",
         "center",
         "Georgia",
       );
@@ -201,9 +198,9 @@ export function makeGame(store, transport, screens) {
         ctx,
         S.drawPile,
         deckX + bw / 2,
-        centerY + bh + 32,
+        centerY + bh + (compactPile ? 7 : g.drawPileCount ? 32 : 15),
         mobile ? 9 : 10,
-        "#bec8ad",
+        "#5e4a2b",
         "center",
       );
       if (store.allowed("DRAW_CARD")) {
@@ -211,7 +208,7 @@ export function makeGame(store, transport, screens) {
           x: deckX - 7,
           y: centerY - 8,
           w: bw + 14,
-          h: bh + 50,
+          h: Math.max(44, bh + (compactPile ? 20 : 50)),
           id: "deck-draw",
           action: "draw",
           label: S.draw,
@@ -227,7 +224,7 @@ export function makeGame(store, transport, screens) {
           "#e8c374",
         );
       }
-      text(ctx, S.right, w / 2, h - 9, 9, "#98a788", "center");
+      if (h >= 300) text(ctx, S.right, w - 4, h - 6, 9, "#655332", "right");
       ctx.restore();
       ctx.restore();
       this.targetOffset = null;
@@ -257,83 +254,102 @@ export function makeGame(store, transport, screens) {
         w,
         h,
         7,
-        isSelf ? "#f7edcf" : "#e9e4cb",
-        winner || donor ? "#e8b659" : null,
+        isSelf ? "#fff7dded" : "#fffaf0d9",
+        winner || donor || active ? "#ad792e" : "#79634140",
       );
-      text(ctx, `${p.seatIndex + 1}`, x + 12, y + 13, 9, "#8e8260", "center");
-      ctx.font = `${mobile ? 11 : 12}px Arial`;
-      text(
-        ctx,
-        short(ctx, p.displayName, w - 32),
-        x + w / 2,
-        y + 15,
-        mobile ? 11 : 12,
-        palette.ink,
-        "center",
-      );
-      let label = winner
-        ? S.won
-        : deciding
-          ? S.deciding
-          : active
-            ? S.active
-            : isSelf
-              ? S.you
-              : p.kind === "BOT"
-                ? S.bot
-                : S.human;
-      text(
-        ctx,
-        short(ctx, label.toUpperCase(), w - 12),
-        x + w / 2,
-        y + 30,
-        mobile ? 7 : 8,
-        active ? "#996d24" : "#718168",
-        "center",
-      );
-      // Fixed public progress slots; there are no card identities or hidden faces here.
-      const circles = mobile ? 14 : 17,
-        spacing = circles + 7,
-        start = x + w / 2 - spacing;
-      for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.arc(start + i * spacing, y + 50, circles / 2, 0, Math.PI * 2);
-        ctx.fillStyle = i < p.visibleTreasureCount ? "#c49945" : "#d9d4bc";
-        ctx.fill();
-        if (i < p.visibleTreasureCount)
-          star(ctx, start + i * spacing, y + 50, 4, "#fff2c6");
-      }
-      if (!mobile) text(
-        ctx,
-        `${Math.min(3, p.visibleTreasureCount)}/3`,
-        x + w - 12,
-        y + 50,
-        8,
-        "#887348",
-        "center",
-      );
-      text(
-        ctx,
-        mobile ? `${p.visibleGoblinCount} ${S.goblins}` : `${p.visibleGoblinCount} ${S.goblins} · ${p.handCount} ${S.handCount}`,
-        x + w / 2,
-        y + (mobile ? 64 : 70),
-        mobile ? 8 : 9,
-        "#68765e",
-        "center",
-      );
-      if (mobile) text(ctx, `${p.handCount} ${S.handCount}`, x + w / 2, y + 76, 8, "#68765e", "center");
-      if (p.controllerMode === "TEMP_BOT" || (!p.connected && p.kind !== "BOT"))
+      const compact = h < (mobile ? 94 : 88),
+        veryShort = h < 56;
+      if (compact) {
+        const name = `${isSelf ? `${S.you} · ` : ""}${p.displayName}`;
+        ctx.font = "11px Arial";
+        text(ctx, short(ctx, name, w - 12), x + w / 2, y + 10, 11, palette.ink, "center");
+        if (!veryShort) {
+          const label = winner ? S.won : deciding ? S.deciding : active ? S.active
+            : p.controllerMode === "TEMP_BOT" ? S.temporary : !p.connected && p.kind !== "BOT" ? S.disconnected
+              : p.kind === "BOT" ? S.bot : S.human;
+          ctx.font = "7px Arial";
+          text(ctx, short(ctx, label.toUpperCase(), w - 10), x + w / 2, y + 23, 7, "#6a522f", "center");
+        }
+        const countY = y + (veryShort ? 23 : h - 24);
+        ctx.font = "8px Arial";
+        text(ctx, short(ctx, `${Math.min(3, p.visibleTreasureCount)}/3 · ${p.visibleGoblinCount} ${S.goblins}`, w - 8), x + w / 2, countY, 8, "#665333", "center");
+        text(ctx, `${p.handCount} ${S.handCount}`, x + w / 2, y + h - 7, 8, "#49553e", "center");
+      } else {
+        text(ctx, `${p.seatIndex + 1}`, x + 12, y + 13, 9, "#8e8260", "center");
+        ctx.font = `${mobile ? 11 : 12}px Arial`;
         text(
           ctx,
-          p.controllerMode === "TEMP_BOT" ? S.temporary : S.disconnected,
+          short(ctx, p.displayName, w - 32),
           x + w / 2,
-          y + h - 8,
-          mobile ? 7 : 8,
-          "#996944",
+          y + 15,
+          mobile ? 11 : 12,
+          palette.ink,
           "center",
         );
-      else if (active) {
-        star(ctx, x + 11, y + 30, 4, "#bd8e36");
+        let label = winner
+          ? S.won
+          : deciding
+            ? S.deciding
+            : active
+              ? S.active
+              : isSelf
+                ? S.you
+                : p.kind === "BOT"
+                  ? S.bot
+                  : S.human;
+        text(
+          ctx,
+          short(ctx, label.toUpperCase(), w - 12),
+          x + w / 2,
+          y + 30,
+          mobile ? 7 : 8,
+          active ? "#996d24" : "#718168",
+          "center",
+        );
+        // Fixed public progress slots; there are no card identities or hidden faces here.
+        const circles = mobile ? 14 : 17,
+          spacing = circles + 7,
+          start = x + w / 2 - spacing;
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.arc(start + i * spacing, y + 50, circles / 2, 0, Math.PI * 2);
+          ctx.fillStyle = i < p.visibleTreasureCount ? "#c49945" : "#d9d4bc";
+          ctx.fill();
+          if (i < p.visibleTreasureCount)
+            star(ctx, start + i * spacing, y + 50, 4, "#fff2c6");
+        }
+        if (!mobile) text(
+          ctx,
+          `${Math.min(3, p.visibleTreasureCount)}/3`,
+          x + w - 12,
+          y + 50,
+          8,
+          "#887348",
+          "center",
+        );
+        text(
+          ctx,
+          mobile ? `${p.visibleGoblinCount} ${S.goblins}` : `${p.visibleGoblinCount} ${S.goblins} · ${p.handCount} ${S.handCount}`,
+          x + w / 2,
+          y + (mobile ? 64 : 70),
+          mobile ? 8 : 9,
+          "#68765e",
+          "center",
+        );
+        if (mobile) text(ctx, `${p.handCount} ${S.handCount}`, x + w / 2, y + 76, 8, "#68765e", "center");
+        if (p.controllerMode === "TEMP_BOT" || (!p.connected && p.kind !== "BOT"))
+          text(
+            ctx,
+            p.controllerMode === "TEMP_BOT" ? S.temporary : S.disconnected,
+            x + w / 2,
+            y + h - 8,
+            mobile ? 7 : 8,
+            "#996944",
+            "center",
+          );
+        else if (active) {
+          star(ctx, x + 11, y + 30, 4, "#bd8e36");
+        }
       }
       if (donor) {
         rounded(ctx, x - 3, y - 3, w + 6, h + 6, 10, null, "#e8c374");

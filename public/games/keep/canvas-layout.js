@@ -5,19 +5,33 @@ export function pageItems(items, page, size) {
   return { items: items.slice(current * size, (current + 1) * size), page: current, pages, start: current * size };
 }
 
-export function getCanvasLayout(width, actionCount = 0, showTray = false) {
-  const wide = width >= 900, pad = wide ? 20 : 12, gap = 16;
+export function getCanvasLayout(width, actionCount = 0, showTray = false, height = 800, activePanel = height < 620 ? null : "hand") {
+  const short = height < 620, wide = width >= 800 || (short && width >= 560);
+  const pad = !short && width >= 600 ? 24 : 10, gap = 8;
   const inner = width - pad * 2;
-  const sidebar = wide ? Math.max(300, Math.min(360, inner * 0.3)) : inner;
-  const boardWidth = wide ? inner - sidebar - gap : inner;
-  const header = { x: pad, y: 14, w: inner, h: 48 };
-  const board = { x: pad, y: 76, w: boardWidth, h: boardWidth < 480 ? 430 : 450 };
-  const decision = { x: wide ? pad + boardWidth + gap : pad, y: wide ? 76 : board.y + board.h + gap, w: sidebar, h: 174 + Math.max(2, actionCount) * 50 };
-  const hand = { x: pad, y: wide ? board.y + board.h + gap : decision.y + decision.h + gap, w: boardWidth, h: 264 };
-  const tray = showTray ? { x: decision.x, y: wide ? decision.y + decision.h + gap : hand.y + hand.h + gap, w: sidebar, h: 388 } : null;
-  const log = { x: pad, y: wide ? hand.y + hand.h + gap : (tray || hand).y + (tray || hand).h + gap, w: boardWidth, h: 210 };
-  const footer = { x: pad, y: Math.max(log.y + log.h, (tray || decision).y + (tray || decision).h) + gap, w: inner, h: 48 };
-  return { wide, width, height: footer.y + footer.h + pad, header, board, decision, hand, tray, log, footer, handSize: Math.max(2, Math.floor((boardWidth - 24) / 108)), traySize: 4, logSize: 3 };
+  const panel = activePanel === "tray" && !showTray ? "hand" : activePanel;
+  const header = { x: pad, y: pad, w: inner, h: short ? 32 : 40 };
+  const footer = { x: pad, y: height - pad - 44, w: inner, h: 44 };
+  const dockHeight = 180;
+  const decisionHeight = wide ? short ? 62 : 78 : 102;
+  // In short landscape windows, a selected tray replaces the table until closed.
+  // All controls keep their actual CSS-pixel size instead of scaling a tall page.
+  const dock = panel ? { x: pad, y: short ? header.y + header.h + gap : footer.y - gap - dockHeight, w: inner,
+    h: short ? footer.y - header.y - header.h - decisionHeight - gap * 3 : dockHeight } : null;
+  const decision = { x: pad, y: (short || !dock ? footer.y : dock.y) - gap - decisionHeight, w: inner, h: decisionHeight };
+  const board = short && dock ? null : { x: pad, y: header.y + header.h + gap, w: inner, h: decision.y - header.y - header.h - gap * 2 };
+  const cardHeight = Math.min(124, (dock?.h || dockHeight) - 48);
+  const cardWidth = cardHeight / 1.42;
+  return {
+    wide, short, width, height, header, board, decision, footer, activePanel: panel,
+    hand: panel === "hand" ? dock : null, tray: panel === "tray" ? dock : null,
+    log: panel === "log" ? dock : null, menu: panel === "menu" ? dock : null,
+    cardWidth, cardHeight,
+    handSize: Math.max(1, Math.floor((inner - 112) / (cardWidth + 12))),
+    traySize: Math.max(1, Math.floor(((dock?.h || dockHeight) - 84) / 44)),
+    logSize: Math.max(1, Math.floor(((dock?.h || dockHeight) - 84) / 36)),
+    actionSize: Math.min(actionCount || 1, wide ? Math.max(2, Math.floor(inner * 0.55 / 140)) : 2),
+  };
 }
 
 export function hitTarget(targets, x, y) {

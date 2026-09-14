@@ -1,5 +1,11 @@
 // All authored interface copy lives here; state-derived names remain plain text.
 export const S = {
+  handTab: "Hand",
+  pileTab: "Pile",
+  reviewPile: "Review pile",
+  clear: "Clear",
+  historyTab: "History",
+  menu: "Menu",
   roomClosed: "This table has closed. You can create or join another.",
   heroDescription:
     "An engraved dragon watches over Treasure, Goblin, and Adventurer cards.",

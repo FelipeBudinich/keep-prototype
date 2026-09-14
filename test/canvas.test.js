@@ -65,46 +65,78 @@ function fixture() {
 const target = (action, dataset = {}) => ({ action, dataset });
 const handles = (items) => items.map((card) => card.handle);
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+const viewports = [
+  [280, 800], [320, 568], [390, 844], [768, 1024],
+  [900, 800], [1280, 800], [1440, 900], [844, 390], [568, 320],
+];
+const panelNames = ["hand", "tray", "log", "menu"];
 
-test("every gameplay panel fits without overlap across narrow and wide canvases", () => {
-  for (const width of [280, 320, 390, 768, 900, 1280]) {
+test("every visible gameplay panel fits the exact viewport without overlap in every panel state", () => {
+  for (const [width, height] of viewports) {
     for (const actionCount of [0, 1, 2, 5]) {
       for (const showTray of [false, true]) {
-        const layout = getCanvasLayout(width, actionCount, showTray);
-        const panels = ["header", "board", "decision", "hand", "tray", "log", "footer"]
-          .filter((name) => layout[name])
-          .map((name) => ({ name, ...layout[name] }));
-        const scenario = `${width}px, ${actionCount} actions, tray ${showTray}`;
-        for (const panel of panels) {
-          assert.ok(panel.w > 0 && panel.h > 0, `${panel.name} has positive size: ${scenario}`);
-          assert.ok(panel.x >= 0 && panel.y >= 0 && panel.x + panel.w <= width && panel.y + panel.h <= layout.height,
-            `${panel.name} fits inside the canvas: ${scenario}`);
+        for (const activePanel of [null, ...panelNames]) {
+          const layout = getCanvasLayout(width, actionCount, showTray, height, activePanel);
+          const scenario = `${width}x${height}, ${actionCount} actions, sender ${showTray}, panel ${activePanel}`;
+          assert.equal(layout.width, width, `canvas width stays at the viewport width: ${scenario}`);
+          assert.equal(layout.height, height, `canvas height stays at the viewport height: ${scenario}`);
+          const expectedPanel = activePanel === "tray" && !showTray ? "hand" : activePanel;
+          assert.equal(layout.activePanel, expectedPanel, `unavailable sender tray falls back to the hand: ${scenario}`);
+          assert.deepEqual(panelNames.filter((name) => layout[name]), expectedPanel ? [expectedPanel] : [],
+            `only the selected dock panel is visible: ${scenario}`);
+          for (const name of ["header", "decision", "footer"])
+            assert.ok(layout[name], `${name} stays available: ${scenario}`);
+          assert.equal(Boolean(layout.board), !(height < 620 && expectedPanel),
+            `short viewports replace the board only while a dock panel is open: ${scenario}`);
+          const panels = ["header", "board", "decision", ...panelNames, "footer"]
+            .filter((name) => layout[name])
+            .map((name) => ({ name, ...layout[name] }));
+          for (const panel of panels) {
+            assert.ok([panel.x, panel.y, panel.w, panel.h].every(Number.isFinite),
+              `${panel.name} has finite geometry: ${scenario}`);
+            assert.ok(panel.w > 0 && panel.h > 0, `${panel.name} has positive size: ${scenario}`);
+            assert.ok(panel.x >= 0 && panel.y >= 0 && panel.x + panel.w <= width && panel.y + panel.h <= height,
+              `${panel.name} fits inside the viewport: ${scenario}`);
+          }
+          for (let i = 0; i < panels.length; i++)
+            for (const other of panels.slice(i + 1))
+              assert.equal(overlaps(panels[i], other), false, `${panels[i].name} overlaps ${other.name}: ${scenario}`);
         }
-        for (let i = 0; i < panels.length; i++)
-          for (const other of panels.slice(i + 1))
-            assert.equal(overlaps(panels[i], other), false, `${panels[i].name} overlaps ${other.name}: ${scenario}`);
       }
     }
   }
 });
 
-test("all 18 hand cards and selected pile entries remain reachable at every canvas width", () => {
+test("all 18 hand cards and selected pile entries remain reachable in every viewport and panel state", () => {
   const { store } = fixture();
   const hand = store.view.self.hand;
-  for (const width of [280, 320, 390, 768, 900, 1280]) {
-    const layout = getCanvasLayout(width, 2, true);
-    for (const size of [layout.handSize, layout.traySize]) {
-      const first = pageItems(hand, 0, size);
-      const visited = [];
-      for (let page = 0; page < first.pages; page++) {
-        const result = pageItems(hand, page, size);
-        assert.ok(result.items.length > 0 && result.items.length <= size);
-        visited.push(...handles(result.items));
+  for (const [width, height] of viewports) {
+    for (const showTray of [false, true]) {
+      for (const activePanel of [null, ...panelNames]) {
+        const layout = getCanvasLayout(width, 2, showTray, height, activePanel);
+        const scenario = `${width}x${height}, sender ${showTray}, panel ${activePanel}`;
+        for (const name of ["handSize", "traySize"]) {
+          const size = layout[name];
+          assert.ok(Number.isInteger(size) && size > 0, `${name} supports at least one card: ${scenario}`);
+          const first = pageItems(hand, 0, size);
+          assert.equal(first.pages, Math.ceil(hand.length / size), `page count exposes the complete hand: ${scenario}`);
+          const visited = [];
+          for (let page = 0; page < first.pages; page++) {
+            const result = pageItems(hand, page, size);
+            assert.equal(result.page, page);
+            assert.ok(result.items.length > 0 && result.items.length <= size);
+            visited.push(...handles(result.items));
+          }
+          assert.deepEqual(visited, handles(hand), `${name}: 18 cards are reachable exactly once: ${scenario}`);
+          assert.equal(new Set(visited).size, 18);
+        }
       }
-      assert.deepEqual(visited, handles(hand), `18 cards are reachable exactly once at ${width}px`);
-      assert.equal(new Set(visited).size, 18);
     }
   }
+  const compactTray = getCanvasLayout(568, 2, true, 320, "tray");
+  const tallTray = getCanvasLayout(568, 2, true, 800, "tray");
+  assert.ok(compactTray.traySize < tallTray.traySize, "landscape coverage exercises a smaller tray page");
+  assert.ok(pageItems(hand, 0, compactTray.traySize).pages > 1, "the compact tray requires pagination");
 });
 
 test("page navigation clamps safely when a hand shrinks or becomes empty", () => {
