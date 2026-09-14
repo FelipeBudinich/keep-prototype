@@ -121,22 +121,41 @@ export function makeGame(store, transport, screens) {
         return { p, x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry, a };
       });
       positions.forEach((pos, i) => {
-        const next = positions[(i + 1) % positions.length];
-        let a = pos.a + Math.PI / ordered.length;
-        const x = cx + Math.cos(a) * rx,
-          y = cy + Math.sin(a) * ry;
+        const next = positions[(i + 1) % positions.length],
+          a = pos.a + Math.PI / ordered.length,
+          // Leave room for a pile in the passing lane, inside the seat panels.
+          lane = ordered.length === 6
+            ? 0.58
+            : ordered.length === 5 && Math.sin(a) > 0
+              ? mobile ? 0.62 : 0.57
+              : 0.7,
+          x = cx + Math.cos(a) * rx * lane,
+          y = cy + Math.sin(a) * ry * (mobile && ordered.length === 6 ? 0.61 : lane);
         ctx.save();
         ctx.translate(x, y);
-        ctx.rotate(a + Math.PI / 2);
-        ctx.strokeStyle = "#aab58a";
-        ctx.lineWidth = 1.3;
-        ctx.beginPath();
-        ctx.moveTo(-6, -4);
-        ctx.lineTo(0, 0);
-        ctx.lineTo(-6, 4);
-        ctx.moveTo(-15, 0);
-        ctx.lineTo(0, 0);
-        ctx.stroke();
+        // The origin stays fixed; the recipient identifies the latest pass.
+        if (g.packet && next.p.playerId === g.packet.recipientPlayerId) {
+          const packetW = mobile ? Math.min(ordered.length === 6 ? 28 : 30, w * 0.085) : ordered.length === 6 ? 28 : 38,
+            packetH = packetW * 1.42;
+          ctx.save();
+          ctx.scale(packetW / 58, packetW / 58);
+          for (let layer = Math.min(3, g.packet.count) - 1; layer >= 0; layer--)
+            card(ctx, null, -29 + layer * 2, -58 * 1.42 / 2 - layer * 2, 58, 58 * 1.42, { back: true });
+          ctx.restore();
+          rounded(ctx, -9, packetH / 2 - 14, 18, 14, 4, "#f7edcf", "#bd8e36");
+          text(ctx, String(g.packet.count), 0, packetH / 2 - 7, 11, palette.ink, "center", "Georgia");
+        } else {
+          ctx.rotate(a + Math.PI / 2);
+          ctx.strokeStyle = "#aab58a";
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          ctx.moveTo(-6, -4);
+          ctx.lineTo(0, 0);
+          ctx.lineTo(-6, 4);
+          ctx.moveTo(-15, 0);
+          ctx.lineTo(0, 0);
+          ctx.stroke();
+        }
         ctx.restore();
         this.drawSeat(
           ctx,
@@ -151,9 +170,8 @@ export function makeGame(store, transport, screens) {
       // Only counts and the same generic card back are used for either hidden zone.
       const bw = mobile ? Math.min(43, w * 0.12) : 58,
         bh = bw * 1.42,
-        centerY = cy - (mobile ? 50 : 38),
-        deckX = cx - bw - 14,
-        packetX = cx + 14;
+        centerY = cy - bh / 2,
+        deckX = cx - bw / 2;
       for (let i = Math.min(3, g.drawPileCount || 0) - 1; i >= 0; i--)
         card(ctx, null, deckX - i * 2, centerY - i * 2, bw, bh, { back: true });
       if (!g.drawPileCount) {
@@ -207,43 +225,6 @@ export function makeGame(store, transport, screens) {
           7,
           null,
           "#e8c374",
-        );
-      }
-      if (g.packet) {
-        for (let i = Math.min(3, g.packet.count) - 1; i >= 0; i--)
-          card(ctx, null, packetX + i * 2, centerY - i * 2, bw, bh, {
-            back: true,
-          });
-        text(
-          ctx,
-          String(g.packet.count),
-          packetX + bw / 2,
-          centerY + bh + 15,
-          16,
-          "#e9d6a6",
-          "center",
-          "Georgia",
-        );
-        text(
-          ctx,
-          S.packet,
-          packetX + bw / 2,
-          centerY + bh + 32,
-          mobile ? 9 : 10,
-          "#bec8ad",
-          "center",
-        );
-      } else {
-        rounded(ctx, packetX, centerY, bw, bh, 5, null, "#61735a");
-        star(ctx, packetX + bw / 2, centerY + bh / 2, 10, "#61735a");
-        text(
-          ctx,
-          S.faceDown,
-          packetX + bw / 2,
-          centerY + bh + 15,
-          mobile ? 8 : 9,
-          "#8c9d82",
-          "center",
         );
       }
       text(ctx, S.right, w / 2, h - 9, 9, "#98a788", "center");
