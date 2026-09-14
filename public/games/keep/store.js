@@ -6,6 +6,7 @@ export class ViewStore extends EventTarget {
     this.status = "connecting";
     this.pending = null;
     this.rooms = [];
+    this.roomsLoaded = false;
     this.draft = [];
     this.error = "";
     this.offset = 0;

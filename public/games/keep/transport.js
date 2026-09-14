@@ -69,6 +69,7 @@ export class Transport {
         roomId: message.roomId,
       };
       s.status = "connected";
+      s.roomsLoaded = false;
       this.attempt = 0;
       s.error = "";
       if (!message.roomId) {
@@ -90,6 +91,7 @@ export class Transport {
       }
     } else if (message.kind === "public_rooms") {
       s.rooms = message.rooms || [];
+      s.roomsLoaded = true;
       s.emit();
     } else if (message.kind === "ack") {
       if (s.pending?.commandId === message.commandId) {

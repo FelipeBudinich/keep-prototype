@@ -23,6 +23,7 @@ export class Screens {
     this.lastAnnouncement = "";
     this.dragHandle = null;
     document.querySelector("#header-note").textContent = S.invitation;
+    document.querySelector("#hero-invitation").textContent = S.invitation;
     document.querySelector("#footer-left").textContent = S.cards;
     document.querySelector("#footer-right").textContent = S.engine;
     document.querySelector("#rules-open").textContent = S.how;
@@ -81,6 +82,25 @@ export class Screens {
     const s = this.store,
       v = s.view,
       screen = s.screen;
+    const landing = !["table", "lobby"].includes(screen);
+    const preserve = landing && this.renderedScreen === screen;
+    const fields = preserve
+      ? [...this.panel.querySelectorAll("form")].flatMap((form) =>
+          [...form.elements].filter((el) => el.name && el.value !== (
+            el.tagName === "SELECT"
+              ? [...el.options].find((option) => option.defaultSelected)?.value || el.options[0]?.value
+              : el.defaultValue
+          )).map((el) => ({
+            form: form.dataset.form, name: el.name, value: el.value,
+          })),
+        )
+      : [];
+    const nameOpen = preserve && this.panel.querySelector(".name-editor")?.open;
+    const focused = preserve && this.panel.contains(document.activeElement)
+      ? document.activeElement : null;
+    const selection = focused?.tagName === "INPUT" && focused.selectionStart !== null
+      ? [focused.selectionStart, focused.selectionEnd] : null;
+    document.body.classList.toggle("landing", landing);
     const connected = s.status === "connected";
     const conn = document.querySelector("#connection");
     conn.textContent = connected ? S.connected : S.reconnecting;
@@ -107,6 +127,28 @@ export class Screens {
         : screen === "lobby"
           ? this.lobby()
           : this.home());
+    for (const field of fields) {
+      const form = [...this.panel.querySelectorAll("form")].find(
+        (form) => form.dataset.form === field.form,
+      );
+      const input = form?.elements.namedItem(field.name);
+      if (input) input.value = field.value;
+    }
+    const nameEditor = this.panel.querySelector(".name-editor");
+    if (nameEditor && nameOpen) nameEditor.open = true;
+    if (focused) {
+      const replacement = [...this.panel.querySelectorAll("input, select, button, summary")].find(
+        (el) => el.tagName === focused.tagName &&
+          el.name === focused.name &&
+          el.form?.dataset.form === focused.form?.dataset.form &&
+          el.dataset.action === focused.dataset.action &&
+          el.dataset.roomId === focused.dataset.roomId,
+      );
+      replacement?.focus({ preventScroll: true });
+      if (replacement && selection) replacement.setSelectionRange(...selection);
+    }
+    this.renderedScreen = screen;
+    if (fields.length) this.updateTotal();
     this.renderHand();
     this.tick();
     if (screen !== "table") {
@@ -142,8 +184,21 @@ export class Screens {
       return `${back}<p class="eyebrow">${S.privateTable || S.private}</p><h2>${S.join}</h2><p class="intro">${S.privateHelp}</p><form data-form="join"><div class="form-fields"><label>${S.code}<input class="code-input" name="code" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="000000" autocomplete="off" required aria-label="${S.code}"></label></div><button class="button primary wide" ${disabled ? "disabled" : ""}>${S.joinTable}</button></form>`;
     if (s.screen === "browse")
       return `${back}<p class="eyebrow">${S.publicTable}</p><h2>${S.browse}</h2>${button(S.refresh, "refresh", "small", disabled)}<div class="room-list">${s.rooms.length ? s.rooms.map((r) => `<article class="room-item"><h3>${e(r.name)}</h3><p class="muted">${e(r.hostDisplayName)} · ${r.bots} ${S.bots.toLowerCase()}<br>${r.availableHumanSeats} ${S.publicCount}</p>${button(S.joinTable, "join-public", "primary wide", disabled, `data-room-id="${e(r.roomId)}"`)}</article>`).join("") : `<div class="empty-state"><h3>${S.noRooms}</h3><p class="muted">${S.noRoomsHelp}</p></div>`}</div>`;
-    return `<p class="eyebrow">${S.invitation}</p><h1>${S.tagline}</h1><p class="intro">${S.intro}</p><form data-form="rename" class="name-inline"><label>${S.name}<input name="displayName" maxlength="24" required autocomplete="nickname" value="${e(s.session?.displayName || "")}" placeholder="${S.guest}"></label><button class="button small" ${disabled ? "disabled" : ""}>${S.saveName}</button></form><div class="home-actions">${s.session?.roomId ? button(S.resume, "resume", "gold wide", disabled) : ""}${button(S.create, "create", "primary wide", disabled)}<div class="button-row">${button(S.browse, "browse", "", disabled)}${button(S.join, "join", "", disabled)}</div></div><div class="hero-meta"><span>${S.players}</span><span>${S.deckCount}</span></div>`;
+    return `<header class="table-panel-heading"><h1>${S.tablePanelTitle}</h1><details class="name-editor"><summary><span class="guest-name">${e(s.session?.displayName || S.guest)}</span><span>${S.changeName}</span></summary><form data-form="rename" class="name-inline"><label>${S.name}<input name="displayName" maxlength="24" required autocomplete="nickname" value="${e(s.session?.displayName || "")}" placeholder="${S.guest}"></label><button class="button small" ${disabled ? "disabled" : ""}>${S.saveName}</button></form></details></header>
+      ${s.session?.roomId ? `<div class="resume-table">${button(S.resume, "resume", "gold wide", disabled)}</div>` : ""}
+      <section class="table-option" aria-labelledby="public-tables-title"><div class="section-heading"><h2 id="public-tables-title">${S.publicTables} <span class="table-count">${s.roomsLoaded ? s.rooms.length : "–"}</span></h2>${button(S.refreshShort, "refresh", "text-button small", disabled, `aria-label="${S.refresh}"`)}</div><div class="room-list landing-rooms" aria-live="polite">${this.publicRooms(disabled)}</div></section>
+      <section class="table-option" aria-labelledby="private-tables-title"><h2 id="private-tables-title">${S.privateTables}</h2><p class="muted" id="private-join-help">${S.privateJoinHelp}</p><form data-form="join" class="private-join"><label class="sr-only" for="private-code">${S.code}</label><input id="private-code" class="code-input" name="code" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="000000" autocomplete="off" required aria-describedby="private-join-help"><button class="button" ${disabled ? "disabled" : ""}>${S.joinTable}</button></form></section>
+      <div class="landing-footer">${button(S.create, "create", "primary wide create-table", disabled)}${button(S.how, "rules", "text-button wide")}</div>`;
   }
+  publicRooms(disabled) {
+    const s = this.store;
+    if (!s.roomsLoaded)
+      return `<div class="empty-state"><p class="muted">${S.loadingTables}</p></div>`;
+    if (!s.rooms.length)
+      return `<div class="empty-state"><p>${S.noRooms}</p><p class="muted">${S.noRoomsHelp}</p></div>`;
+    return s.rooms.map((r) => `<article class="room-item"><div class="room-info"><h3>${e(r.name)}</h3><p class="muted">${e(r.hostDisplayName)} · ${r.availableHumanSeats} ${S.publicCount}${r.bots ? ` · ${r.bots} ${r.bots === 1 ? S.botDragon : S.bots.toLowerCase()}` : ""}</p></div>${button(S.joinTable, "join-public", "small", disabled, `data-room-id="${e(r.roomId)}" aria-label="${e(`${S.joinTable}: ${r.name}`)}"`)}</article>`).join("");
+  }
+
   configurationForm(edit) {
     const v = this.store.view,
       config = edit ? v.room.configuration : { additionalHumans: 1, bots: 0 };
@@ -321,7 +376,7 @@ export class Screens {
     document.querySelector("#total-preview").textContent = n;
     document.querySelector("#count-error").hidden = valid;
     form.querySelector("button[type=submit],button.primary").disabled =
-      !valid || Boolean(this.store.pending);
+      !valid || this.store.status !== "connected" || Boolean(this.store.pending);
   }
   async submit(event) {
     event.preventDefault();
@@ -371,9 +426,10 @@ export class Screens {
     if (["home", "create", "join", "browse"].includes(action)) {
       s.screen = action;
       s.error = "";
-      if (action === "browse") t.read("LIST_PUBLIC_ROOMS");
+      if (action === "browse" || action === "home") t.read("LIST_PUBLIC_ROOMS");
       s.emit();
-    } else if (action === "refresh") t.read("LIST_PUBLIC_ROOMS");
+    } else if (action === "rules") document.querySelector("#rules-dialog").showModal();
+    else if (action === "refresh") t.read("LIST_PUBLIC_ROOMS");
     else if (action === "reconnect") {
       t.start();
     } else if (action === "resume") t.start();

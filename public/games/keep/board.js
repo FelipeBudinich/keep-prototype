@@ -50,7 +50,7 @@ export function makeGame(store, transport) {
           ? mobile
             ? 430
             : 450
-          : Math.min(590, Math.max(440, width * 1.04));
+          : Math.min(590, Math.max(280, width * 1.04));
       const scale = Math.min(2, window.devicePixelRatio || 1);
       if (
         width !== this.width ||
@@ -113,7 +113,7 @@ export function makeGame(store, transport) {
         h = this.height,
         cx = w * 0.51,
         cy = h * 0.36,
-        r = Math.min(w * 0.32, 174);
+        r = Math.min(w * 0.32, h * (h < 440 ? 0.26 : 0.29), 174);
       ctx.save();
       ctx.strokeStyle = "#d5c8a8";
       ctx.lineWidth = 1;
@@ -145,9 +145,10 @@ export function makeGame(store, transport) {
       ctx.fillRect(-46, -r - 35, 92, 25);
       text(ctx, S.myth, 0, -r - 23, 9, "#94815c", "center");
       ctx.restore();
-      const cw = Math.min(127, w * 0.245),
+      const compact = h < 440,
+        cw = Math.min(127, w * 0.245, compact ? h * 0.195 : 127),
         ch = cw * 1.46,
-        base = h * 0.57;
+        base = h * (compact ? 0.55 : 0.57);
       card(ctx, "GOBLIN", cx - cw * 1.46, base + 20, cw, ch, {
         rotation: -0.19,
       });
@@ -157,7 +158,7 @@ export function makeGame(store, transport) {
       card(ctx, "TREASURE", cx - cw * 0.5, base - 1, cw, ch, {
         rotation: -0.025,
       });
-      text(ctx, S.subtitle, w / 2, h - 30, 15, "#69705d", "center", "Georgia");
+      text(ctx, S.subtitle, w / 2, h - (compact ? 12 : 30), 15, "#69705d", "center", "Georgia");
       for (const [x, y] of [
         [w * 0.08, h * 0.21],
         [w * 0.88, h * 0.48],
