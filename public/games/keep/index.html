@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#163d32" />
+    <meta
+      name="description"
+      content="A multiplayer game of dragons, treasure, and hidden intentions. Gather your friends or play with bots."
+    />
+    <title>Keep — A game of hoards & hidden intentions</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23163d32'/%3E%3Cpath d='M25 20h12v27l27-27h15L49 50l31 30H64L37 53v27H25z' fill='%23e6c06c'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="/" aria-label="Keep home"
+        >keep<span class="wordmark-dot">✦</span></a
+      ><span class="header-note" id="header-note"></span>
+      <nav>
+        <span id="connection" class="connection"></span
+        ><button id="rules-open" class="button text-button"></button>
+      </nav>
+    </header>
+    <div id="status" class="status-banner" role="status"></div>
+    <main id="layout" class="layout home-layout">
+      <section id="screen-panel" class="screen-panel"></section>
+      <section id="stage" class="stage">
+        <div class="canvas-wrap">
+          <canvas
+            id="board"
+            tabindex="0"
+            role="img"
+            aria-label="Keep game table"
+          ></canvas>
+        </div>
+        <section id="hand-panel" class="hand-panel" hidden>
+          <div class="hand-heading">
+            <div>
+              <p class="eyebrow" id="hand-heading"></p>
+              <p class="muted" id="hand-help"></p>
+            </div>
+            <span id="hand-count" class="badge"></span>
+          </div>
+          <div class="hand-scroll">
+            <canvas
+              id="hand-canvas"
+              role="img"
+              aria-label="Your private hand"
+            ></canvas>
+          </div>
+          <div id="card-controls"></div>
+        </section>
+      </section>
+    </main>
+    <footer class="footer">
+      <span id="footer-left"></span><span id="footer-right"></span>
+    </footer>
+    <div
+      id="announcement"
+      class="sr-only"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
+    <dialog id="rules-dialog">
+      <button id="rules-close" class="dialog-close button" aria-label="Close">
+        ×
+      </button>
+      <div id="rules-content"></div>
+    </dialog>
+    <div id="toast" role="status" class="toast" hidden></div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

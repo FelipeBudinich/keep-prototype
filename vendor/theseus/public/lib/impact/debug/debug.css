@@ -1,0 +1,148 @@
+.ig_debug {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  min-height: 28px;
+  background: #000;
+  border-top: 2px solid #f57401;
+  color: #fff;
+  font: 12px/1.2 Helvetica, Arial, sans-serif;
+  user-select: none;
+}
+
+.ig_debug_panel_menu {
+  position: relative;
+  min-height: 28px;
+  background: linear-gradient(#333, #000);
+}
+
+.ig_debug_panel_menu div,
+.ig_debug_panel_menu button {
+  float: left;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 7px 9px 0;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid #333;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.ig_debug_panel_menu .ig_debug_head {
+  color: #999;
+  font-weight: 700;
+}
+
+.ig_debug_menu_item:hover,
+.ig_debug_menu_item.active {
+  background: #fff;
+  color: #000;
+  cursor: pointer;
+}
+
+.ig_debug_stats {
+  position: absolute;
+  top: 0;
+  right: 0;
+  float: none !important;
+  border-left: 1px solid #333;
+  color: #999;
+  text-align: right;
+}
+
+.ig_debug_stats span,
+.ig_debug_legend_number {
+  display: inline-block;
+  width: 3.5em;
+  margin: 0 0.25em 0 0.4em;
+  color: #fff;
+  font-family: 'Courier New', monospace;
+  text-align: right;
+}
+
+.ig_debug_panel {
+  clear: both;
+  height: 152px;
+  overflow: auto;
+  position: relative;
+}
+
+.ig_debug_panel .ig_debug_panel {
+  clear: none;
+  float: left;
+  height: auto;
+  padding: 8px;
+  border-right: 2px solid #222;
+}
+
+.ig_debug_option {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 3px 8px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.ig_debug_option:first-child {
+  margin-top: 8px;
+}
+
+.ig_debug_option:hover {
+  background: #111;
+}
+
+.ig_debug_label_mark,
+.ig_debug_legend_color {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  background: #444;
+}
+
+.ig_debug_label_mark.enabled {
+  background: #fff;
+}
+
+.ig_debug_legend {
+  color: #ccc;
+}
+
+.ig_debug_legend_color {
+  width: 6px;
+  margin-left: 16px;
+}
+
+.ig_debug_graph_mark {
+  position: absolute;
+  left: 4px;
+  margin-top: -12px;
+  color: #888;
+  font-size: 10px;
+}
+
+.ig_debug_map_container {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #888;
+}
+
+.ig_debug_map_container canvas,
+.ig_debug_map_screen {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.ig_debug_map_screen {
+  border: 1px solid #f0f;
+}

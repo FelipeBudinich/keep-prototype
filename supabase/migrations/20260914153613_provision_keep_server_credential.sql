@@ -1,0 +1,5 @@
+-- Deployment credential provisioned separately for role keep_app.
+-- The production migration holds a SCRAM verifier; credentials and verifiers
+-- are deliberately omitted from source control. For a new deployment, assign
+-- a strong random password to keep_app using an administrator connection and
+-- put the resulting session-pooler URI in SUPABASE_DB_URL on the server only.

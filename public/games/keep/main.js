@@ -1,0 +1,11 @@
+import ig from "../../lib/impact/impact.js";
+import { ViewStore } from "./store.js";
+import { Transport } from "./transport.js";
+import { Screens } from "./screens.js";
+import { makeGame } from "./board.js";
+const store = new ViewStore();
+const transport = new Transport(store);
+new Screens(store, transport);
+ig.Sound.enabled = false;
+ig.main("#board", makeGame(store, transport), 60, 640, 580, 1);
+transport.start();

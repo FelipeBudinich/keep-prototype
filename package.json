@@ -1,0 +1,26 @@
+{
+  "name": "keep-prototype",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Keep — an authoritative multiplayer dragon card game",
+  "engines": {
+    "node": "24.18.0"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --env-file-if-exists=.env server/index.js",
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.js",
+    "heroku-postbuild": "npm run build"
+  },
+  "dependencies": {
+    "pg": "8.23.0",
+    "ws": "8.21.3"
+  },
+  "devDependencies": {
+    "free-tex-packer-core": "0.3.9",
+    "sharp": "0.35.4",
+    "vite": "8.3.0"
+  }
+}
