@@ -372,6 +372,7 @@ export class RoomService {
               !room ||
               room.status === "CLOSED" ||
               (!privateJoin && room.visibility !== "PUBLIC") ||
+              (privateJoin && existing && !canResume) ||
               (!canResume &&
                 (room.status !== "LOBBY" ||
                   room.seats.filter((s) => s.kind === "HUMAN").length >=

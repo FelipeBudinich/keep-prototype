@@ -92,7 +92,8 @@ export function validateMessage(message) {
     fail("INVALID_MESSAGE", "Readiness must be true or false.");
   if (
     message.type === "JOIN_PRIVATE_ROOM" &&
-    !/^\d{6}$/.test(message.payload.code)
+    (typeof message.payload.code !== "string" ||
+      !/^\d{6}$/.test(message.payload.code))
   )
     fail("ROOM_UNAVAILABLE", "Room unavailable.");
   if (

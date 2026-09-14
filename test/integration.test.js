@@ -1155,3 +1155,35 @@ test("terminal inactivity expiry notifies every subscribed socket and removes sn
   }
   assert.ok(!f.store.data.rooms[roomId]);
 });
+
+test("private joins never confirm an unavailable code to an already-seated guest and codes must be strings", async (t) => {
+  const f = await fixture(t);
+  const owner = await f.client(),
+    seated = await f.client();
+  const config = {
+    name: "Private boundary",
+    visibility: "PRIVATE",
+    additionalHumans: 1,
+    bots: 0,
+  };
+  await owner.accepted("CREATE_ROOM", config);
+  await seated.accepted("CREATE_ROOM", config);
+  const before = structuredClone(f.store.data);
+  const unavailable = await seated.rejected(
+    "JOIN_PRIVATE_ROOM",
+    { code: owner.view.room.code },
+    "ROOM_UNAVAILABLE",
+  );
+  assert.equal(unavailable.message, "Room unavailable.");
+  await seated.rejected(
+    "JOIN_PRIVATE_ROOM",
+    { code: 123456 },
+    "ROOM_UNAVAILABLE",
+  );
+  await seated.rejected(
+    "JOIN_PRIVATE_ROOM",
+    { code: ["123456"] },
+    "ROOM_UNAVAILABLE",
+  );
+  assert.deepEqual(f.store.data, before);
+});
