@@ -8,7 +8,7 @@ A multiplayer dragon card game for 2–6 players. Hoard three visible treasures 
 
 ## Architecture
 
-Node.js 24.18.0 is the single authoritative process; `ws` carries authenticated, individually projected snapshots. The playable board runs in Theseus, pinned to `a6c5535cd99eaf2ebabdf09d26d286ca5de85287`. Native HTML forms and buttons provide keyboard and screen-reader access to the same commands and views.
+Node.js 24.18.0 is the single authoritative process; `ws` carries authenticated, individually projected snapshots. All gameplay is drawn in one Theseus canvas: the table, private hand, outgoing pile, decisions, timer, and public log. Theseus is pinned to `a6c5535cd99eaf2ebabdf09d26d286ca5de85287`. Transparent native buttons match the canvas controls for keyboard and screen-reader access, with visible focus drawn on the canvas and a semantic text summary of the game. The home and lobby screens use native HTML forms.
 
 Supabase Postgres replaces the specification's original SQLite default at the user's request. The private `keep_private` schema holds a transactional JSON snapshot of rooms, guest-session verifiers, private card handles, and idempotency receipts. `room_codes` enforces unique six-digit codes. A compare-and-swap revision and a session-level PostgreSQL advisory lock fence the single authority. The serialized executor includes lobby allocations, commands, bot decisions, presence, and deadlines. All automatic game effects commit together before acknowledgment or publication.
 

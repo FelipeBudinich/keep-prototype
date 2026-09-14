@@ -399,7 +399,20 @@ nav {
   overflow: hidden;
 }
 .canvas-wrap {
+  position: relative;
   width: 100%;
+}
+.game-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.game-controls button {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 #board {
   width: 100%;
@@ -701,184 +714,25 @@ input.code-input {
   color: var(--muted);
 }
 .table-layout {
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 30px;
-  padding-top: 27px;
+  display: block;
+  max-width: 1440px;
+  padding: 20px 3vw 30px;
+  min-height: 0;
 }
 .table-layout .stage {
-  grid-column: 1;
-  grid-row: 1;
+  width: 100%;
 }
-.table-layout .screen-panel {
-  grid-column: 2;
-  grid-row: 1;
-}
-.table-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 18px;
-  gap: 10px;
-}
-.table-title h2 {
-  font-size: 25px;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.turn-tag {
-  font-size: 10px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.decision-card {
-  background: var(--green);
-  color: var(--cream);
-  border-radius: 9px;
-  padding: 23px 20px;
-  margin-bottom: 20px;
-}
-.decision-card .eyebrow {
-  color: #d4b16b;
-  margin-bottom: 10px;
-}
-.decision-card h2 {
-  font-size: 30px;
-  letter-spacing: -0.8px;
-  margin: 0 0 12px;
-}
-.decision-card .muted {
-  color: #bcccbe;
-  line-height: 1.6;
-  margin-bottom: 20px;
-}
-.decision-card .button {
-  border-color: #e1d9bb;
-  color: var(--cream);
-}
-.decision-card .button.gold {
-  border-color: #e8c374;
-  color: #263d2f;
-}
-.decision-card .button:hover:enabled {
-  background: #e8c37425;
-}
-.decision-card .button.gold:hover:enabled {
-  background: #f4d895;
-}
-.decision-actions {
-  display: grid;
-  gap: 10px;
-}
-.decision-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-.timer {
-  display: flex;
-  gap: 2px;
-  align-items: baseline;
-  font-family: Georgia, serif;
-  font-size: 27px;
-  color: #e7c57e;
-}
-.timer small {
-  font-family: Arial, sans-serif;
-  font-size: 10px;
-}
-.timer.urgent {
-  color: #ffa384;
-}
-.tray-section {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 17px;
-  background: #fffaf066;
-  margin-bottom: 20px;
-}
-.tray-section h3 {
-  font-size: 21px;
-  margin-bottom: 8px;
-}
-.tray-section .eyebrow {
-  font-size: 9px;
-  margin: 12px 0;
-}
-.tray {
-  list-style: none;
-  padding: 0;
-  margin: 10px 0;
-}
-.tray li {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--cream);
-  padding: 8px 5px 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  margin-bottom: 6px;
-  cursor: grab;
-}
-.tray li.drag-over {
-  border-color: var(--gold);
-  box-shadow: 0 -2px var(--gold);
-}
-.tray-label {
-  flex: 1;
-  font-size: 11px;
+.playing {
   min-width: 0;
 }
-.tray-index {
-  color: var(--muted);
-  font-size: 10px;
-  width: 12px;
+.playing .site-header {
+  height: 76px;
+  gap: 12px;
+  margin-right: 3vw;
+  margin-left: 3vw;
 }
-.icon-button {
-  min-width: 36px;
-  min-height: 44px;
-  padding: 5px;
-  border: 0;
-  background: transparent;
-  border-radius: 4px;
-  color: var(--ink);
-  font-size: 15px;
-}
-.icon-button:hover {
-  background: #eadcbb;
-}
-.chronicle {
-  border-top: 1px solid var(--line);
-  padding-top: 21px;
-  margin-top: 22px;
-}
-.chronicle h3 {
-  font-size: 20px;
-}
-.chronicle ol {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  max-height: 245px;
-  overflow: auto;
-}
-.chronicle li {
-  font-size: 11px;
-  line-height: 1.65;
-  padding: 9px 0 9px 13px;
-  border-bottom: 1px solid #ded7c7;
-  position: relative;
-  color: #657168;
-}
-.chronicle li:before {
-  content: "·";
-  position: absolute;
-  left: 1px;
-  font-size: 20px;
-  color: var(--gold);
+.playing .wordmark {
+  font-size: 42px;
 }
 .table-bottom {
   display: flex;
@@ -888,65 +742,6 @@ input.code-input {
 }
 .table-bottom .button {
   font-size: 11px;
-}
-.hand-panel {
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: #fffaf066;
-  margin-top: 16px;
-  padding: 18px 20px 10px;
-}
-.hand-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: start;
-  gap: 10px;
-}
-.hand-heading .eyebrow {
-  color: var(--ink);
-  margin-bottom: 6px;
-}
-.hand-heading .muted {
-  font-size: 11px;
-  margin: 0;
-}
-.hand-scroll {
-  overflow-x: auto;
-  overflow-y: hidden;
-  margin: 7px -8px 0;
-  padding: 0 0 6px;
-  scrollbar-width: thin;
-  scrollbar-color: #b8bda8 transparent;
-}
-#hand-canvas {
-  display: block;
-  touch-action: pan-x;
-}
-#card-controls details {
-  border-top: 1px solid var(--line);
-  padding: 12px 0 3px;
-}
-#card-controls summary {
-  font-size: 10px;
-  color: var(--muted);
-  cursor: pointer;
-  min-height: 34px;
-  padding: 8px 0;
-}
-#card-controls .accessible-hand {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 8px 0 12px;
-}
-#card-controls .button {
-  min-height: 44px;
-  padding: 10px;
-  font-size: 11px;
-}
-#card-controls [aria-pressed="true"] {
-  background: var(--green);
-  color: var(--cream);
 }
 .footer {
   border-top: 1px solid var(--line);
@@ -1062,21 +857,8 @@ dialog::backdrop {
   .header-note {
     display: none;
   }
-  .table-layout {
-    grid-template-columns: minmax(0, 1fr) 270px;
-    gap: 20px;
-  }
-  .table-layout .decision-card {
-    padding: 20px 16px;
-  }
   .lobby-layout {
     grid-template-columns: 1fr 1fr;
-  }
-  .tray-section {
-    padding: 13px;
-  }
-  .icon-button {
-    min-width: 31px;
   }
 }
 @media (max-width: 760px) {
@@ -1159,85 +941,7 @@ dialog::backdrop {
     margin: auto;
   }
   .table-layout {
-    display: flex;
-    flex-direction: column;
     padding: 20px 3vw 30px;
-    gap: 16px;
-  }
-  .table-layout .stage {
-    width: 100%;
-    order: 2;
-  }
-  .table-layout .screen-panel {
-    display: contents;
-  }
-  .table-title {
-    order: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0 2vw;
-  }
-  .decision-card {
-    order: 1;
-    width: 100%;
-    margin: 0;
-    position: sticky;
-    top: 0;
-    z-index: 3;
-    box-shadow: 0 5px 15px #173f3420;
-  }
-  .tray-section {
-    order: 3;
-    width: 100%;
-    margin: 0;
-  }
-  .chronicle {
-    order: 5;
-    width: 100%;
-    margin-top: 0;
-    padding: 18px 2vw 0;
-  }
-  .table-bottom {
-    order: 6;
-    width: 100%;
-    padding: 0 2vw;
-  }
-  .table-layout .screen-panel > .error {
-    order: 0;
-    width: 100%;
-  }
-  .table-layout .screen-panel > .bot-banner {
-    order: 2;
-    width: 100%;
-  }
-  .decision-card h2 {
-    font-size: 27px;
-  }
-  .decision-card .muted {
-    margin-bottom: 15px;
-  }
-  .decision-actions {
-    grid-template-columns: 1fr 1fr;
-  }
-  .decision-actions .button:only-child {
-    grid-column: 1/-1;
-  }
-  .decision-heading {
-    margin-bottom: 8px;
-  }
-  .decision-card .eyebrow {
-    margin: 0;
-  }
-  .hand-panel {
-    padding: 15px 14px 7px;
-    margin-top: 10px;
-  }
-  .hand-heading .muted {
-    font-size: 10px;
-    max-width: 240px;
-  }
-  .table-title h2 {
-    font-size: 24px;
   }
   .footer {
     padding: 20px 0;
@@ -1254,9 +958,6 @@ dialog::backdrop {
   }
   dialog {
     padding: 32px 23px;
-  }
-  .chronicle ol {
-    max-height: 160px;
   }
 }
 @media (max-width: 380px) {
@@ -1282,5 +983,16 @@ dialog::backdrop {
     transition: none !important;
     animation: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+@media (min-width: 1500px) {
+  .table-layout {
+    padding: 20px 3vw 30px;
+  }
+}
+@media (min-width: 761px) and (max-width: 1050px) {
+  .table-layout {
+    padding: 20px 3vw 30px;
   }
 }

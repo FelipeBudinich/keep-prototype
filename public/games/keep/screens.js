@@ -1,4 +1,5 @@
-import { S, cardLabel, logMessages } from "./strings.js";
+import { S, cardLabel } from "./strings.js";
+import { getTableState, logText } from "./table-view.js";
 export const escapeHtml = (value) =>
   String(value ?? "").replace(
     /[&<>"']/g,
@@ -21,7 +22,6 @@ export class Screens {
     this.leaving = false;
     this.toastTimer = null;
     this.lastAnnouncement = "";
-    this.dragHandle = null;
     document.querySelector("#header-note").textContent = S.invitation;
     document.querySelector("#hero-invitation").textContent = S.invitation;
     document.querySelector("#footer-left").textContent = S.cards;
@@ -40,33 +40,6 @@ export class Screens {
     });
     this.panel.addEventListener("submit", (event) => this.submit(event));
     this.panel.addEventListener("input", () => this.updateTotal());
-    this.panel.addEventListener("dragstart", (event) => {
-      const item = event.target.closest("[data-handle]");
-      if (item) {
-        this.dragHandle = item.dataset.handle;
-        event.dataTransfer.setData("text/plain", this.dragHandle);
-        event.dataTransfer.effectAllowed = "move";
-      }
-    });
-    this.panel.addEventListener("dragover", (event) => {
-      const item = event.target.closest(".tray li");
-      if (item) {
-        event.preventDefault();
-        item.classList.add("drag-over");
-      }
-    });
-    this.panel.addEventListener("dragleave", (event) =>
-      event.target.closest(".tray li")?.classList.remove("drag-over"),
-    );
-    this.panel.addEventListener("drop", (event) => {
-      const item = event.target.closest(".tray li");
-      if (!item) return;
-      event.preventDefault();
-      const from = this.store.draft.indexOf(this.dragHandle),
-        to = this.store.draft.indexOf(item.dataset.handle);
-      if (from >= 0 && to >= 0) this.store.move(this.dragHandle, to - from);
-      this.dragHandle = null;
-    });
     store.addEventListener("change", () => this.render());
     this.render();
     setInterval(() => this.tick(), 250);
@@ -101,6 +74,7 @@ export class Screens {
     const selection = focused?.tagName === "INPUT" && focused.selectionStart !== null
       ? [focused.selectionStart, focused.selectionEnd] : null;
     document.body.classList.toggle("landing", landing);
+    document.body.classList.toggle("playing", screen === "table");
     const connected = s.status === "connected";
     const conn = document.querySelector("#connection");
     conn.textContent = connected ? S.connected : S.reconnecting;
@@ -119,11 +93,14 @@ export class Screens {
     banner.innerHTML = `${e(notice)} ${act}`;
     document.querySelector("#layout").className =
       `layout ${screen === "table" ? "table-layout" : screen === "lobby" ? "lobby-layout" : "home-layout"}`;
-    document.querySelector("#hand-panel").hidden = screen !== "table";
+    this.panel.hidden = screen === "table";
+    const summary = document.querySelector("#game-summary");
+    summary.hidden = screen !== "table";
+    summary.innerHTML = screen === "table" ? this.table() : "";
     this.panel.innerHTML =
       (s.error ? `<div class="error" role="alert">${e(s.error)}</div>` : "") +
       (screen === "table"
-        ? this.table()
+        ? ""
         : screen === "lobby"
           ? this.lobby()
           : this.home());
@@ -149,7 +126,6 @@ export class Screens {
     }
     this.renderedScreen = screen;
     if (fields.length) this.updateTotal();
-    this.renderHand();
     this.tick();
     if (screen !== "table") {
       document.querySelector("#announcement").textContent = "";
@@ -228,132 +204,17 @@ export class Screens {
   }
   table() {
     const s = this.store,
-      v = s.view;
-    if (!v) return "";
-    const game = v.game || {},
-      me = v.self,
-      ended =
-        ["FINISHED", "ABANDONED", "CLOSED", "ERROR"].includes(v.room.status) ||
-        Boolean(game.winnerPlayerId) ||
-        Boolean(game.terminalReason);
-    const winner = v.players.find((p) => p.playerId === game.winnerPlayerId),
-      myDecision = game.decision?.playerId === me.playerId,
-      receiver = s.allowed("REVEAL_PACKET_TOP"),
-      take = s.allowed("TAKE_RANDOM_CARD");
-    const title =
-      v.room.status === "ERROR"
-        ? S.roomErrorTitle
-        : ended
-          ? winner?.playerId === me.playerId
-            ? S.victory
-            : winner
-              ? `${winner.displayName} ${S.won}`
-              : S.abandoned
-          : me.controllerMode === "TEMP_BOT"
-            ? S.botControl
-            : myDecision
-              ? receiver
-                ? S.receivePrompt
-                : S.yourTurn
-              : S.waitPrompt;
-    const explanation =
-      v.room.status === "ERROR"
-        ? S.roomErrorHelp
-        : ended
-          ? winner
-            ? S.resultHelp
-            : S.abandonedHelp
-          : me.controllerMode === "TEMP_BOT"
-            ? S.botHelp
-            : myDecision
-              ? receiver
-                ? S.receiveHelp
-                : take
-                  ? S.takeHelp
-                  : S.sendPrompt
-              : S.waitHelp;
-    let actions = "";
-    if (s.allowed("DRAW_CARD")) actions += button(S.draw, "draw", "gold wide");
-    if (s.allowed("PASS_PACKET")) actions += button(S.pass, "pass", "wide");
-    if (receiver) actions += button(S.reveal, "reveal", "gold wide");
-    if (take) {
-      const ids = v.allowedCommands.legalTakeTargetPlayerIds;
-      actions += ids
-        .map((id) =>
-          button(
-            `${S.take} · ${v.players.find((p) => p.playerId === id)?.displayName}`,
-            "take",
-            "gold wide",
-            false,
-            `data-player-id="${e(id)}"`,
-          ),
-        )
-        .join("");
-    }
-    if (s.allowed("RECLAIM_CONTROL"))
-      actions += button(S.reclaim, "reclaim", "gold wide");
-    if (s.allowed("RETURN_TO_LOBBY"))
-      actions += button(S.rematch, "rematch", "gold wide");
-    if (ended && !s.allowed("RETURN_TO_LOBBY"))
-      actions += `<p class="muted">${S.waitRematch}</p>`;
-    if (this.leaving)
-      actions = `<p class="muted">${S.leaveLive}</p>${button(S.leaveConfirm, "confirm-leave", "wide")}${button(S.cancelLeave, "cancel-leave", "wide")}`;
-    const status = ended
-      ? S.finalBoard
-      : myDecision
-        ? S.controls
-        : `${S.deciding}: ${v.players.find((p) => p.playerId === game.decision?.playerId)?.displayName || S.thinking}`;
-    let tray = "";
-    if (s.allowed("SEND_PACKET") || s.draft.length) {
-      const ordered = [...v.players].sort((a, b) => a.seatIndex - b.seatIndex),
-        i = ordered.findIndex((p) => p.playerId === me.playerId),
-        neighbor = ordered[(i + 1) % ordered.length];
-      tray = `<section class="tray-section"><h3>${S.tray}</h3><p class="muted">${S.sendTo} ${e(neighbor?.displayName)}</p><p class="eyebrow">${S.top}</p><ol class="tray">${s.draft
-        .map((handle, index) => {
-          const card = me.hand.find((c) => c.handle === handle);
-          return `<li draggable="true" data-handle="${e(handle)}"><span class="tray-index">${index + 1}</span><span class="tray-label">${e(cardLabel(card?.type))}</span>${button("↑", "move-up", "icon-button", index === 0, `data-handle="${e(handle)}" aria-label="${S.moveUp}: ${e(cardLabel(card?.type))}"`)}${button("↓", "move-down", "icon-button", index === s.draft.length - 1, `data-handle="${e(handle)}" aria-label="${S.moveDown}: ${e(cardLabel(card?.type))}"`)}${button("×", "remove-card", "icon-button", false, `data-handle="${e(handle)}" aria-label="${S.remove}: ${e(cardLabel(card?.type))}"`)}</li>`;
-        })
-        .join(
-          "",
-        )}</ol>${!s.draft.length ? `<p class="muted">${S.trayEmpty}</p>` : ""}<p class="muted">${S.trayHelp}</p>${button(`${S.send}${s.draft.length ? ` · ${s.draft.length}` : ""}`, "send", "primary wide", !s.allowed("SEND_PACKET") || !s.draft.length)}</section>`;
-    }
-    return `<div class="table-title"><h2>${e(v.room.name)}</h2><span class="turn-tag">${S.turn} ${game.turnNumber || 1}</span></div><section class="decision-card"><div class="decision-heading"><p class="eyebrow">${e(status)}</p>${!ended ? '<span id="countdown" class="timer" aria-label="Decision countdown"></span>' : ""}</div><h2>${e(title)}</h2><p class="muted">${e(explanation)}</p><div class="decision-actions">${actions}</div></section>${tray}<section class="chronicle"><h3>${S.chronicle}</h3><ol>${
-      (v.recentPublicLog || [])
-        .slice(-12)
-        .reverse()
-        .map((entry) => `<li>${e(this.logText(entry))}</li>`)
-        .join("") || `<li>${S.noLog}</li>`
-    }</ol></section><div class="table-bottom">${v.room.code ? button(S.copyCode, "copy-code", "text-button") : ""}${button(S.leave, "leave", "text-button", !s.allowed("LEAVE_ROOM"))}</div>`;
-  }
-  logText(entry) {
-    if (typeof entry === "string") return entry;
-    if (entry.message) return entry.message;
-    const v = this.store.view,
-      name = (id) =>
-        v.players.find((p) => p.playerId === id)?.displayName || S.guest;
-    return logMessages[entry.type || entry.kind]?.(entry, name) || S.noLog;
-  }
-  renderHand() {
-    const s = this.store,
-      v = s.view;
-    if (!v || s.screen !== "table") return;
-    document.querySelector("#hand-heading").textContent = S.hand;
-    document.querySelector("#hand-help").textContent = s.allowed("SEND_PACKET")
-      ? S.handHelp
-      : S.handHelp.split(".")[1]?.trim() || S.handHelp;
-    document.querySelector("#hand-count").textContent =
-      `${v.self.hand?.length || 0} ${S.handCount}`;
-    const oldOpen = document.querySelector("#card-controls details")?.open;
-    document.querySelector("#card-controls").innerHTML =
-      `<details ${oldOpen ? "open" : ""}><summary>${S.accessibleCards}</summary><div class="accessible-hand">${(v.self.hand || []).map((card, i) => button(`${i + 1}. ${cardLabel(card.type)}`, "select-card", "", !s.allowed("SEND_PACKET"), `data-handle="${e(card.handle)}" aria-pressed="${s.draft.includes(card.handle)}"`)).join("") || `<p class="muted">${S.noHand}</p>`}</div><p class="muted">${S.keyboard}</p><p class="live-summary">${v.players.map((p) => `${e(p.displayName)}: ${p.visibleTreasureCount}/3 ${S.treasures}, ${p.visibleGoblinCount} ${S.goblins}, ${p.handCount} ${S.handCount}. ${p.playerId === v.game?.activePlayerId ? S.active + "." : ""} ${p.playerId === v.game?.decision?.playerId ? S.deciding + "." : ""}`).join(" ")}</p></details>`;
+      v = s.view,
+      state = getTableState(s, this.leaving);
+    if (!state) return "";
+    const game = v.game || {};
+    return `${s.error ? `<p role="alert">${e(s.error)}</p>` : ""}<h2>${e(v.room.name)}</h2><p>${S.turn} ${game.turnNumber || 1}. ${e(state.status)}</p><section aria-labelledby="game-decision-title"><h3 id="game-decision-title">${e(state.title)}</h3><p>${e(state.explanation)}</p>${!state.ended ? `<p id="countdown" aria-label="${S.countdownLabel}"></p>` : ""}${state.ended && !s.allowed("RETURN_TO_LOBBY") ? `<p>${S.waitRematch}</p>` : ""}</section><p id="game-keyboard-help">${S.keyboard}</p><section aria-labelledby="game-lairs-title"><h3 id="game-lairs-title">${S.table}</h3><ul>${v.players.map((player) => `<li>${e(player.displayName)}${player.playerId === v.self.playerId ? ` (${S.you})` : ""}: ${player.visibleTreasureCount}/3 ${S.treasures}, ${player.visibleGoblinCount} ${S.goblins}, ${player.handCount} ${S.handCount}. ${player.playerId === game.activePlayerId ? `${S.active}.` : ""} ${player.playerId === game.decision?.playerId ? `${S.deciding}.` : ""}</li>`).join("")}</ul></section><section aria-labelledby="game-hand-title"><h3 id="game-hand-title">${S.hand}</h3><p>${v.self.hand?.length || 0} ${S.handCount}.</p>${!v.self.hand?.length ? `<p>${S.noHand}</p>` : `<ol>${v.self.hand.map((card) => `<li>${e(cardLabel(card.type))}${s.draft.includes(card.handle) ? ` · ${S.selected}` : ""}</li>`).join("")}</ol>`}</section><section aria-labelledby="game-draft-title"><h3 id="game-draft-title">${S.tray}</h3><p>${S.sendTo} ${e(state.neighbor?.displayName)}. ${S.top}.</p>${s.draft.length ? `<ol>${s.draft.map((handle) => `<li>${e(cardLabel(v.self.hand.find((card) => card.handle === handle)?.type))}</li>`).join("")}</ol>` : `<p>${S.trayEmpty}</p>`}</section><section aria-labelledby="game-log-title"><h3 id="game-log-title">${S.chronicle}</h3><ol>${(v.recentPublicLog || []).slice(-12).reverse().map((entry) => `<li>${e(logText(entry, v))}</li>`).join("") || `<li>${S.noLog}</li>`}</ol></section>`;
   }
   tick() {
     const el = document.querySelector("#countdown");
     if (el) {
       const n = this.store.remaining();
-      el.innerHTML =
-        n === 0 ? `<small>${S.expired}</small>` : `${n ?? "–"}<small>s</small>`;
-      el.classList.toggle("urgent", n !== null && n <= 10);
+      el.textContent = n === 0 ? S.expired : `${n ?? "–"} ${S.countdown}`;
     }
   }
   updateTotal() {
@@ -473,25 +334,15 @@ export class Screens {
     } else if (action === "select-card" || action === "remove-card") {
       const handle = el.dataset.handle;
       s.toggle(handle);
-      this.restoreFocus(action, handle);
     } else if (action === "move-up" || action === "move-down") {
       const handle = el.dataset.handle;
       s.move(handle, action === "move-up" ? -1 : 1);
-      this.restoreFocus(action, handle);
+    } else if (action === "clear-pile") {
+      s.draft = [];
+      s.emit();
     } else if (action === "send")
       t.send("SEND_PACKET", { orderedHandCardHandles: [...s.draft] });
     else if (action === "take")
       t.send("TAKE_RANDOM_CARD", { targetPlayerId: el.dataset.playerId });
-  }
-  restoreFocus(action, handle) {
-    const buttons = [...document.querySelectorAll("[data-action]")];
-    const el =
-      buttons.find(
-        (el) =>
-          el.dataset.action === action &&
-          el.dataset.handle === handle &&
-          !el.disabled,
-      ) || buttons.find((el) => el.dataset.handle === handle && !el.disabled);
-    el?.focus({ preventScroll: true });
   }
 }

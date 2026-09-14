@@ -141,6 +141,14 @@ export const S = {
   trayEmpty: "Select cards from your hand to arrange a pile.",
   trayHelp:
     "Drag to reorder, or use the move buttons. Your draft stays private.",
+  canvasTrayHelp: "Use the arrows to reorder. The top card is revealed first.",
+  canvasKeyboard: "Tab through controls · Enter or Space to choose · D draw · P pass · R reveal",
+  previous: "Previous",
+  next: "Next",
+  page: "Page",
+  clearPile: "Clear pile",
+  showLog: "Show tales",
+  hideLog: "Hide tales",
   moveUp: "Move toward the top",
   moveDown: "Move toward the bottom",
   remove: "Remove card from pile",
@@ -175,7 +183,7 @@ export const S = {
   waitRematch: "The host can prepare a fresh game.",
   finalBoard: "Final table",
   keyboard:
-    "Table shortcuts: D draw · P pass · R reveal. Use the card controls below for keyboard selection.",
+    "Table shortcuts: D draw · P pass · R reveal. Tab through the controls and press Enter or Space to choose.",
   accessibleCards: "Keyboard & screen reader card controls",
   countdown: "seconds left",
   expired: "Resolving…",

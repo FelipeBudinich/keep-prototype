@@ -1,112 +1,15 @@
 import ig from "../../lib/impact/impact.js";
 import { S } from "./strings.js";
-import { card, dragon, icon, palette, rounded, star, text } from "./cards.js";
-import { Presentation } from "./animations.js";
+import { card, dragon, palette, rounded, star, text } from "./cards.js";
+import { canvasGameplay } from "./canvas-gameplay.js";
 function short(ctx, value, width) {
   let out = String(value);
-  while (ctx.measureText(out).width > width && out.length > 1)
-    out = out.slice(0, -1);
-  return out === value ? out : `${out.slice(0, -1)}…`;
+  while (ctx.measureText(out).width > width && out.length > 1) out = out.slice(0, -1);
+  return out === String(value) ? out : `${out.slice(0, -1)}…`;
 }
-export function makeGame(store, transport) {
+export function makeGame(store, transport, screens) {
   return ig.Game.extend({
-    init() {
-      this.store = store;
-      this.transport = transport;
-      this.presentation = new Presentation();
-      this.targets = [];
-      this.handTargets = [];
-      this.lastHand = "";
-      this.width = 0;
-      this.height = 0;
-      this.scale = 1;
-      ig.input.bind("MousePrimary", "activate");
-      ig.input.bind("KeyD", "draw");
-      ig.input.bind("KeyP", "pass");
-      ig.input.bind("KeyR", "reveal");
-      ig.input.bind("Escape", "clear");
-      this.handCanvas = document.querySelector("#hand-canvas");
-      this.handContext = this.handCanvas.getContext("2d");
-      this.handCanvas.addEventListener("click", (event) => {
-        const r = this.handCanvas.getBoundingClientRect(),
-          x = event.clientX - r.left,
-          y = event.clientY - r.top;
-        const hit = this.handTargets.find(
-          (t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h,
-        );
-        if (hit) store.toggle(hit.handle);
-      });
-    },
-    update() {
-      const width = Math.max(
-        280,
-        Math.round(
-          document.querySelector(".canvas-wrap").getBoundingClientRect().width,
-        ),
-      );
-      const mobile = width < 480,
-        table = store.screen === "table",
-        height = table
-          ? mobile
-            ? 430
-            : 450
-          : Math.min(590, Math.max(280, width * 1.04));
-      const scale = Math.min(2, window.devicePixelRatio || 1);
-      if (
-        width !== this.width ||
-        height !== this.height ||
-        scale !== this.scale
-      ) {
-        this.width = width;
-        this.height = height;
-        this.scale = scale;
-        ig.system.resize(width, height, scale);
-        ig.system.canvas.style.height = `${height}px`;
-        ig.system.canvas.style.width = "100%";
-      }
-      this.presentation.observe(store.view);
-      if (ig.input.pressed("activate")) {
-        const p = ig.input.mouse,
-          hit = this.targets.find(
-            (t) =>
-              p.x >= t.x && p.x <= t.x + t.w && p.y >= t.y && p.y <= t.y + t.h,
-          );
-        if (hit && store.allowed(hit.type))
-          transport.send(hit.type, hit.payload || {});
-      }
-      if (document.activeElement === ig.system.canvas) {
-        for (const [key, type] of [
-          ["draw", "DRAW_CARD"],
-          ["pass", "PASS_PACKET"],
-          ["reveal", "REVEAL_PACKET_TOP"],
-        ])
-          if (ig.input.pressed(key) && store.allowed(type))
-            transport.send(type);
-        if (ig.input.pressed("clear")) {
-          store.draft = [];
-          store.emit();
-        }
-      }
-      ig.system.canvas.style.cursor = this.targets.some(
-        (t) =>
-          ig.input.mouse.x >= t.x &&
-          ig.input.mouse.x <= t.x + t.w &&
-          ig.input.mouse.y >= t.y &&
-          ig.input.mouse.y <= t.y + t.h &&
-          store.allowed(t.type),
-      )
-        ? "pointer"
-        : "default";
-    },
-    draw() {
-      const ctx = ig.system.context;
-      ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
-      ctx.clearRect(0, 0, this.width, this.height);
-      this.targets = [];
-      if (store.screen === "table" && store.view) this.drawTable(ctx);
-      else this.drawHero(ctx);
-      if (store.screen === "table") this.drawHand();
-    },
+    ...canvasGameplay(store, transport, screens),
     drawHero(ctx) {
       ig.system.canvas.setAttribute("aria-label", S.heroDescription);
       const w = this.width,
@@ -167,12 +70,15 @@ export function makeGame(store, transport) {
         star(ctx, x, y, 6, "#b79a59");
       ctx.restore();
     },
-    drawTable(ctx) {
+    drawBoard(ctx, rect) {
       const v = store.view,
         g = v.game || {},
-        w = this.width,
-        h = this.height,
+        w = rect.w,
+        h = rect.h,
         mobile = w < 480;
+      ctx.save();
+      ctx.translate(rect.x, rect.y);
+      this.targetOffset = rect;
       rounded(ctx, 0, 0, w, h, 12, palette.green);
       ctx.save();
       rounded(ctx, 11, 11, w - 22, h - 22, 9, null, "#56705a");
@@ -185,9 +91,9 @@ export function makeGame(store, transport) {
       ])
         star(ctx, x, y, 5, "#83906a");
       const cx = w / 2,
-        cy = h * 0.49,
+        cy = h * 0.50,
         rx = w * (mobile ? 0.35 : 0.33),
-        ry = h * 0.35;
+        ry = h * 0.34;
       ctx.strokeStyle = "#6e815845";
       ctx.setLineDash([2, 8]);
       ctx.beginPath();
@@ -198,17 +104,17 @@ export function makeGame(store, transport) {
         selfIndex = players.findIndex((p) => p.playerId === v.self.playerId),
         ordered = players.slice(selfIndex).concat(players.slice(0, selfIndex));
       const pw = mobile ? Math.min(99, w * 0.26) : Math.min(162, w * 0.22),
-        ph = mobile ? 84 : 100;
+        ph = mobile ? 94 : 100;
       const positions = ordered.map((p, i) => {
         const a = Math.PI / 2 + (i * Math.PI * 2) / ordered.length;
         if (mobile && ordered.length === 6) {
           const positions = [
-            [0.5, 0.87],
-            [0.18, 0.65],
+            [0.5, 0.845],
+            [0.18, 0.70],
             [0.18, 0.29],
-            [0.5, 0.105],
+            [0.5, 0.13],
             [0.82, 0.29],
-            [0.82, 0.65],
+            [0.82, 0.70],
           ];
           return { p, x: w * positions[i][0], y: h * positions[i][1], a };
         }
@@ -243,9 +149,9 @@ export function makeGame(store, transport) {
         );
       });
       // Only counts and the same generic card back are used for either hidden zone.
-      const bw = mobile ? 43 : 58,
+      const bw = mobile ? Math.min(43, w * 0.12) : 58,
         bh = bw * 1.42,
-        centerY = cy - 38,
+        centerY = cy - (mobile ? 50 : 38),
         deckX = cx - bw - 14,
         packetX = cx + 14;
       for (let i = Math.min(3, g.drawPileCount || 0) - 1; i >= 0; i--)
@@ -283,12 +189,14 @@ export function makeGame(store, transport) {
         "center",
       );
       if (store.allowed("DRAW_CARD")) {
-        this.targets.push({
+        this.addTarget({
           x: deckX - 7,
           y: centerY - 8,
           w: bw + 14,
           h: bh + 50,
-          type: "DRAW_CARD",
+          id: "deck-draw",
+          action: "draw",
+          label: S.draw,
         });
         rounded(
           ctx,
@@ -338,18 +246,10 @@ export function makeGame(store, transport) {
           "center",
         );
       }
-      text(ctx, S.right, w / 2, h - 18, 9, "#98a788", "center");
+      text(ctx, S.right, w / 2, h - 9, 9, "#98a788", "center");
       ctx.restore();
-      const summary = players
-        .map(
-          (p) =>
-            `${p.displayName}, ${p.visibleTreasureCount} ${S.treasures}, ${p.visibleGoblinCount} ${S.goblins}, ${p.handCount} ${S.handCount}`,
-        )
-        .join("; ");
-      ig.system.canvas.setAttribute(
-        "aria-label",
-        `${S.table}. ${summary}. ${S.drawPile}: ${g.drawPileCount}. ${g.packet ? `${S.packet}: ${g.packet.count}.` : ""}`,
-      );
+      ctx.restore();
+      this.targetOffset = null;
     },
     drawSeat(ctx, p, x, y, w, h, mobile) {
       const v = store.view,
@@ -403,7 +303,7 @@ export function makeGame(store, transport) {
                 : S.human;
       text(
         ctx,
-        label.toUpperCase(),
+        short(ctx, label.toUpperCase(), w - 12),
         x + w / 2,
         y + 30,
         mobile ? 7 : 8,
@@ -422,7 +322,7 @@ export function makeGame(store, transport) {
         if (i < p.visibleTreasureCount)
           star(ctx, start + i * spacing, y + 50, 4, "#fff2c6");
       }
-      text(
+      if (!mobile) text(
         ctx,
         `${Math.min(3, p.visibleTreasureCount)}/3`,
         x + w - 12,
@@ -433,13 +333,14 @@ export function makeGame(store, transport) {
       );
       text(
         ctx,
-        `${p.visibleGoblinCount} ${S.goblins} · ${p.handCount} ${S.handCount}`,
+        mobile ? `${p.visibleGoblinCount} ${S.goblins}` : `${p.visibleGoblinCount} ${S.goblins} · ${p.handCount} ${S.handCount}`,
         x + w / 2,
         y + (mobile ? 64 : 70),
         mobile ? 8 : 9,
         "#68765e",
         "center",
       );
+      if (mobile) text(ctx, `${p.handCount} ${S.handCount}`, x + w / 2, y + 76, 8, "#68765e", "center");
       if (p.controllerMode === "TEMP_BOT" || (!p.connected && p.kind !== "BOT"))
         text(
           ctx,
@@ -455,63 +356,17 @@ export function makeGame(store, transport) {
       }
       if (donor) {
         rounded(ctx, x - 3, y - 3, w + 6, h + 6, 10, null, "#e8c374");
-        this.targets.push({
+        this.addTarget({
           x,
           y,
           w,
           h,
-          type: "TAKE_RANDOM_CARD",
-          payload: { targetPlayerId: p.playerId },
+          id: `seat-take:${p.playerId}`,
+          action: "take",
+          label: `${S.take} · ${p.displayName}`,
+          dataset: { playerId: p.playerId },
         });
       }
-    },
-    drawHand() {
-      const hand = store.view?.self.hand || [],
-        cw = 103,
-        ch = 145,
-        gap = 13,
-        pad = 13,
-        logicalWidth = Math.max(
-          document.querySelector(".hand-scroll").clientWidth,
-          hand.length * (cw + gap) + pad,
-        ),
-        logicalHeight = 174;
-      const key = JSON.stringify([hand, store.draft, logicalWidth, this.scale]);
-      if (key === this.lastHand) return;
-      this.lastHand = key;
-      this.handCanvas.width = logicalWidth * this.scale;
-      this.handCanvas.height = logicalHeight * this.scale;
-      this.handCanvas.style.width = `${logicalWidth}px`;
-      this.handCanvas.style.height = `${logicalHeight}px`;
-      const ctx = this.handContext;
-      ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
-      ctx.clearRect(0, 0, logicalWidth, logicalHeight);
-      this.handTargets = [];
-      hand.forEach((c, i) => {
-        const selected = store.draft.includes(c.handle),
-          x = pad + i * (cw + gap),
-          y = selected ? 5 : 13;
-        card(ctx, c.type, x, y, cw, ch, { selected, index: i });
-        this.handTargets.push({ x, y, w: cw, h: ch, handle: c.handle });
-        if (selected) {
-          rounded(ctx, x + cw - 23, y - 3, 25, 23, 12, "#b88a36");
-          text(
-            ctx,
-            String(store.draft.indexOf(c.handle) + 1),
-            x + cw - 10,
-            y + 9,
-            11,
-            "#fff8e7",
-            "center",
-          );
-        }
-      });
-      if (!hand.length)
-        text(ctx, S.noHand, 24, 77, 17, "#7b856c", "left", "Georgia");
-      this.handCanvas.setAttribute(
-        "aria-label",
-        `${S.hand}. ${hand.map((c) => S[c.type.toLowerCase()]).join(", ")}`,
-      );
     },
   });
 }

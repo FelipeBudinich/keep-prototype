@@ -40,24 +40,9 @@
             role="img"
             aria-label="Keep game table"
           ></canvas>
+          <div id="game-controls" class="game-controls" role="group" aria-label="Gameplay controls" hidden></div>
         </div>
-        <section id="hand-panel" class="hand-panel" hidden>
-          <div class="hand-heading">
-            <div>
-              <p class="eyebrow" id="hand-heading"></p>
-              <p class="muted" id="hand-help"></p>
-            </div>
-            <span id="hand-count" class="badge"></span>
-          </div>
-          <div class="hand-scroll">
-            <canvas
-              id="hand-canvas"
-              role="img"
-              aria-label="Your private hand"
-            ></canvas>
-          </div>
-          <div id="card-controls"></div>
-        </section>
+        <section id="game-summary" class="sr-only" aria-label="Game summary" hidden></section>
       </section>
     </main>
     <footer class="footer">
